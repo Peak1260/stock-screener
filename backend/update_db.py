@@ -2,8 +2,8 @@ import requests
 import sqlite3
 import os
 
-# API_KEY = os.getenv("FMP_API_KEY")  # Load securely from GitHub Actions secret
-URL = f"https://financialmodelingprep.com/api/v3/stock/list?apikey=wzNXU4pF6LNPg9u3BQbzmEu4xdYCu2WO"
+API_KEY = os.getenv("FMP_API_KEY")  # Load securely from GitHub Actions secret
+URL = f"https://financialmodelingprep.com/api/v3/stock/list?apikey={API_KEY}"
 
 FILTER_CONDITIONS = {
     "exchange": {"NYSE", "NASDAQ"},
