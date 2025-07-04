@@ -1,3 +1,7 @@
 requests
 pandas
 sqlite-utils
+fastapi
+uvicorn[standard]
+databases
+aiosqlite
