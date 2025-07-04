@@ -1,0 +1,37 @@
+name: Update Stock Database
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend  
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run update script
+        env:
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+        run: python update_db.py
+
+      - name: Upload SQLite database
+        uses: actions/upload-artifact@v3
+        with:
+          name: stocks-db
+          path: backend/stocks.db
