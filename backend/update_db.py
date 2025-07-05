@@ -27,13 +27,13 @@ FILTERS = {
 def passes_filters(info):
     try:
         return (
-            info.get("grossMargins", 0) >= FILTERS["grossMargins"] and
-            info.get("ebitdaMargins", 0) >= FILTERS["ebitdaMargins"] and
-            info.get("operatingMargins", 0) >= FILTERS["operatingMargins"] and
-            info.get("earningsGrowth", 0) >= FILTERS["earningsGrowth"] and
-            info.get("revenueGrowth", 0) >= FILTERS["revenueGrowth"] and
-            info.get("returnOnAssets", 0) >= FILTERS["returnOnAssets"] and
-            info.get("returnOnEquity", 0) >= FILTERS["returnOnEquity"]
+            info.get("grossMargins", 0) > FILTERS["grossMargins"] and
+            info.get("ebitdaMargins", 0) > FILTERS["ebitdaMargins"] and
+            info.get("operatingMargins", 0) > FILTERS["operatingMargins"] and
+            info.get("earningsGrowth", 0) > FILTERS["earningsGrowth"] and
+            info.get("revenueGrowth", 0) > FILTERS["revenueGrowth"] and
+            info.get("returnOnAssets", 0) > FILTERS["returnOnAssets"] and
+            info.get("returnOnEquity", 0) > FILTERS["returnOnEquity"]
         )
     except Exception:
         return False

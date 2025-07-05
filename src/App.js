@@ -4,8 +4,8 @@ import axios from 'axios';
 const thresholds = {
   forwardPE: [10, 40],           
   trailingPegRatio: 2,           
-  enterpriseToRevenue: 5,       
-  enterpriseToEbitda: 15,        
+  enterpriseToRevenue: 15,       
+  enterpriseToEbitda: 30,        
   freeCashflow: 0,             
 };
 
@@ -46,8 +46,8 @@ export default function StockTable() {
 
     if (stock.forwardPE >= thresholds.forwardPE[0] && stock.forwardPE <= thresholds.forwardPE[1]) count++;
     if (stock.trailingPegRatio < thresholds.trailingPegRatio) count++;
-    if (stock.enterpriseToRevenue > thresholds.enterpriseToRevenue) count++;
-    if (stock.enterpriseToEbitda > thresholds.enterpriseToEbitda) count++;
+    if (stock.enterpriseToRevenue < thresholds.enterpriseToRevenue) count++;
+    if (stock.enterpriseToEbitda < thresholds.enterpriseToEbitda) count++;
     if (stock.freeCashflow > thresholds.freeCashflow) count++;
 
     return count;
@@ -96,7 +96,16 @@ export default function StockTable() {
               return (
                 <tr key={stock.symbol} className={`border-b hover:bg-gray-50 ${rowStyle}`}>
                   <td className="px-4 py-2 font-semibold">{stock.symbol}</td>
-                  <td className="px-4 py-2">{stock.name || '—'}</td>
+                  <td className="px-4 py-2">
+                    <a
+                      href={`https://finance.yahoo.com/quote/${stock.symbol}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-500 hover:underline"
+                    >
+                      {stock.name}
+                    </a>
+                  </td>
                   <td className="px-4 py-2">{stock.criteriaPassed}/5</td>
                   <td className="px-4 py-2">{(stock.marketCap / 1e9).toFixed(2)}B</td>
                   <td className={`px-4 py-2 ${getStatusClass(stock.forwardPE, thresholds.forwardPE, 'range')}`}>
@@ -105,10 +114,10 @@ export default function StockTable() {
                   <td className={`px-4 py-2 ${getStatusClass(stock.trailingPegRatio, thresholds.trailingPegRatio, 'less')}`}>
                     {formatNumber(stock.trailingPegRatio)}
                   </td>
-                  <td className={`px-4 py-2 ${getStatusClass(stock.enterpriseToRevenue, thresholds.enterpriseToRevenue, 'greater')}`}>
+                  <td className={`px-4 py-2 ${getStatusClass(stock.enterpriseToRevenue, thresholds.enterpriseToRevenue, 'less')}`}>
                     {formatNumber(stock.enterpriseToRevenue)}
                   </td>
-                  <td className={`px-4 py-2 ${getStatusClass(stock.enterpriseToEbitda, thresholds.enterpriseToEbitda, 'greater')}`}>
+                  <td className={`px-4 py-2 ${getStatusClass(stock.enterpriseToEbitda, thresholds.enterpriseToEbitda, 'less')}`}>
                     {formatNumber(stock.enterpriseToEbitda)}
                   </td>
                   <td className={`px-4 py-2 ${getStatusClass(stock.freeCashflow, thresholds.freeCashflow, 'greater')}`}>
