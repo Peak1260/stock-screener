@@ -16,8 +16,28 @@ async def shutdown():
 
 @app.get("/stocks")
 async def get_stocks():
+    query = """
+    SELECT
+        symbol,
+        name,
+        marketCap,
+        grossMargins,
+        ebitdaMargins,
+        operatingMargins,
+        earningsGrowth,
+        revenueGrowth,
+        returnOnAssets,
+        returnOnEquity,
+        forwardPE,
+        trailingPegRatio,
+        enterpriseToRevenue,
+        enterpriseToEbitda,
+        freeCashflow,
+        debtToEquity
+    FROM stocks
+    """
     try:
-        rows = await database.fetch_all("SELECT * FROM stocks")
+        rows = await database.fetch_all(query)
         data = [dict(row) for row in rows]
         return data
     except Exception as e:

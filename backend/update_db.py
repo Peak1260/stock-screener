@@ -2,6 +2,12 @@ import os
 import requests
 import yfinance as yf
 import sqlite3
+from dotenv import load_dotenv
+from pathlib import Path
+
+# Load .env from parent directory
+env_path = Path(__file__).resolve().parent.parent / '.env'
+load_dotenv(dotenv_path=env_path)
 
 API_KEY = os.getenv("FMP_API_KEY")
 FMP_URL = f"https://financialmodelingprep.com/api/v3/stock/list?apikey={API_KEY}"
@@ -19,33 +25,31 @@ FILTERS = {
 def passes_filters(info):
     try:
         return (
-            info.get("grossMargins", 0) and info["grossMargins"] >= FILTERS["grossMargins"] and
-            info.get("ebitdaMargins", 0) and info["ebitdaMargins"] >= FILTERS["ebitdaMargins"] and
-            info.get("operatingMargins", 0) and info["operatingMargins"] >= FILTERS["operatingMargins"] and
-            info.get("earningsGrowth", 0) and info["earningsGrowth"] >= FILTERS["earningsGrowth"] and
-            info.get("revenueGrowth", 0) and info["revenueGrowth"] >= FILTERS["revenueGrowth"] and
-            info.get("returnOnAssets", 0) and info["returnOnAssets"] >= FILTERS["returnOnAssets"] and
-            info.get("returnOnEquity", 0) and info["returnOnEquity"] >= FILTERS["returnOnEquity"]
+            info.get("grossMargins", 0) >= FILTERS["grossMargins"] and
+            info.get("ebitdaMargins", 0) >= FILTERS["ebitdaMargins"] and
+            info.get("operatingMargins", 0) >= FILTERS["operatingMargins"] and
+            info.get("earningsGrowth", 0) >= FILTERS["earningsGrowth"] and
+            info.get("revenueGrowth", 0) >= FILTERS["revenueGrowth"] and
+            info.get("returnOnAssets", 0) >= FILTERS["returnOnAssets"] and
+            info.get("returnOnEquity", 0) >= FILTERS["returnOnEquity"]
         )
     except Exception:
         return False
 
 def main():
-    # Step 1: Get all stocks from FMP
     response = requests.get(FMP_URL)
     stocks = response.json()
 
-    # Step 2: Filter stocks by exchange and market cap
     filtered_tickers = [
         s['symbol'] for s in stocks
-        if s.get("exchangeShortName") in {"NYSE", "NASDAQ"} and s.get("marketCap", 0) >= 10_000_000_000
+        if s.get("exchangeShortName") in {"NYSE", "NASDAQ"}
     ]
 
-    print(f"Tickers passing exchange & market cap filter: {len(filtered_tickers)}")
+    print(f"Tickers passing exchange: {len(filtered_tickers)}")
 
-    # Set up SQLite
     conn = sqlite3.connect("stocks.db")
     c = conn.cursor()
+    c.execute("DROP TABLE IF EXISTS stocks")
     c.execute("""
         CREATE TABLE IF NOT EXISTS stocks (
             symbol TEXT PRIMARY KEY,
@@ -56,27 +60,29 @@ def main():
             operatingMargins REAL,
             earningsGrowth REAL,
             revenueGrowth REAL,
+            forwardPE REAL,
+            trailingPegRatio REAL,
+            priceToSalesTrailing12Months REAL,
+            enterpriseToRevenue REAL,
+            enterpriseToEbitda REAL,
+            freeCashflow REAL,
+            debtToEquity REAL,
             returnOnAssets REAL,
             returnOnEquity REAL
         )
     """)
     c.execute("DELETE FROM stocks")
 
-    # Step 3: Use yfinance to get detailed metrics and filter again
     for ticker in filtered_tickers:
         try:
             yf_ticker = yf.Ticker(ticker)
             info = yf_ticker.info
 
-            # Defensive: skip if no info or missing keys
-            if not info or 'marketCap' not in info:
+            if not info:
                 continue
 
-            # Apply your detailed filters
-            if passes_filters(info):
-                c.execute("""
-                    INSERT OR REPLACE INTO stocks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
+            if passes_filters(info):  # You might want to update filters to use new fields too
+                row = (
                     info.get("symbol"),
                     info.get("shortName"),
                     info.get("marketCap"),
@@ -85,9 +91,17 @@ def main():
                     info.get("operatingMargins"),
                     info.get("earningsGrowth"),
                     info.get("revenueGrowth"),
+                    info.get("forwardPE"),
+                    info.get("trailingPegRatio"),
+                    info.get("priceToSalesTrailing12Months"),
+                    info.get("enterpriseToRevenue"),
+                    info.get("enterpriseToEbitda"),
+                    info.get("freeCashflow"),
+                    info.get("debtToEquity"),
                     info.get("returnOnAssets"),
                     info.get("returnOnEquity"),
-                ))
+                )
+                c.execute("INSERT OR REPLACE INTO stocks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", row)
                 print(f"Added {ticker}")
 
         except Exception as e:

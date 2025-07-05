@@ -6,3 +6,4 @@ uvicorn[standard]
 databases
 aiosqlite
 yfinance
+python-dotenv
