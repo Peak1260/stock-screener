@@ -4,6 +4,8 @@ import yfinance as yf
 import sqlite3
 from dotenv import load_dotenv
 from pathlib import Path
+import time
+import urllib.error
 
 # Load .env from parent directory
 env_path = Path(__file__).resolve().parent.parent / '.env'
@@ -13,13 +15,13 @@ API_KEY = os.getenv("FMP_API_KEY")
 FMP_URL = f"https://financialmodelingprep.com/api/v3/stock/list?apikey={API_KEY}"
 
 FILTERS = {
-    "grossMargins": 0.40,
+    "grossMargins": 0.45,
     "ebitdaMargins": 0.15,
     "operatingMargins": 0.10,
-    "earningsGrowth": 0.08,
-    "revenueGrowth": 0.08,
-    "returnOnAssets": 0.10,
-    "returnOnEquity": 0.15,
+    "earningsGrowth": 0.07,
+    "revenueGrowth": 0.07,
+    "returnOnAssets": 0.05,
+    "returnOnEquity": 0.20,
 }
 
 def passes_filters(info):
@@ -42,16 +44,18 @@ def main():
 
     filtered_tickers = [
         s['symbol'] for s in stocks
-        if s.get("exchangeShortName") in {"NYSE", "NASDAQ"}
+        if s.get("exchangeShortName") in {"NYSE", "NASDAQ"} and s.get("price", 0) is not None and s.get("price", 0) >= 10.0 and s.get("type") == "stock"
     ]
 
     print(f"Tickers passing exchange: {len(filtered_tickers)}")
 
     conn = sqlite3.connect("stocks.db")
     c = conn.cursor()
-    c.execute("DROP TABLE IF EXISTS stocks")
+
+    # Step 1: Create a temporary table
+    c.execute("DROP TABLE IF EXISTS stocks_temp")
     c.execute("""
-        CREATE TABLE IF NOT EXISTS stocks (
+        CREATE TABLE stocks_temp (
             symbol TEXT PRIMARY KEY,
             name TEXT,
             marketCap REAL,
@@ -62,16 +66,13 @@ def main():
             revenueGrowth REAL,
             forwardPE REAL,
             trailingPegRatio REAL,
-            priceToSalesTrailing12Months REAL,
             enterpriseToRevenue REAL,
             enterpriseToEbitda REAL,
             freeCashflow REAL,
-            debtToEquity REAL,
             returnOnAssets REAL,
             returnOnEquity REAL
         )
     """)
-    c.execute("DELETE FROM stocks")
 
     for ticker in filtered_tickers:
         try:
@@ -81,7 +82,7 @@ def main():
             if not info:
                 continue
 
-            if passes_filters(info):  # You might want to update filters to use new fields too
+            if passes_filters(info):
                 row = (
                     info.get("symbol"),
                     info.get("shortName"),
@@ -93,19 +94,35 @@ def main():
                     info.get("revenueGrowth"),
                     info.get("forwardPE"),
                     info.get("trailingPegRatio"),
-                    info.get("priceToSalesTrailing12Months"),
                     info.get("enterpriseToRevenue"),
                     info.get("enterpriseToEbitda"),
                     info.get("freeCashflow"),
-                    info.get("debtToEquity"),
                     info.get("returnOnAssets"),
                     info.get("returnOnEquity"),
                 )
-                c.execute("INSERT OR REPLACE INTO stocks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", row)
+                c.execute("INSERT OR REPLACE INTO stocks_temp VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", row)
                 print(f"Added {ticker}")
 
+            time.sleep(0.2)
+
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                print(f"HTTP 404 error for {ticker}")
+            else:
+                print(f"HTTP error for {ticker}: {e}")
         except Exception as e:
             print(f"Error for {ticker}: {e}")
+
+    # Step 2: Final commit & atomic swap
+    conn.commit()
+    try:
+        c.execute("DROP TABLE IF EXISTS stocks_backup")
+        c.execute("ALTER TABLE stocks RENAME TO stocks_backup")
+        c.execute("ALTER TABLE stocks_temp RENAME TO stocks")
+        c.execute("DROP TABLE IF EXISTS stocks_backup")
+        print("✅ Table swap complete.")
+    except Exception as e:
+        print(f"⚠️ Error during table swap: {e}")
 
     conn.commit()
     conn.close()

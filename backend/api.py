@@ -1,10 +1,19 @@
 from fastapi import FastAPI, HTTPException
 from databases import Database
+from fastapi.middleware.cors import CORSMiddleware
 
 DATABASE_URL = "sqlite:///backend/stocks.db"
 database = Database(DATABASE_URL)
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"], 
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.on_event("startup")
 async def startup():
@@ -32,8 +41,7 @@ async def get_stocks():
         trailingPegRatio,
         enterpriseToRevenue,
         enterpriseToEbitda,
-        freeCashflow,
-        debtToEquity
+        freeCashflow
     FROM stocks
     """
     try:

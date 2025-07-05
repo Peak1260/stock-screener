@@ -2,12 +2,11 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 
 const thresholds = {
-  forwardPE: [10, 40],             // Between 10 and 40
-  trailingPegRatio: 2,            // Less than 2
-  enterpriseToRevenue: 5,        // Greater than 5
-  enterpriseToEbitda: 25,        // Greater than 25
-  freeCashflow: 0,               // Greater than 0
-  debtToEquity: 1,               // Less than 1
+  forwardPE: [10, 40],           
+  trailingPegRatio: 2,           
+  enterpriseToRevenue: 5,       
+  enterpriseToEbitda: 15,        
+  freeCashflow: 0,             
 };
 
 const getStatusClass = (value, threshold, rule = 'range') => {
@@ -29,7 +28,9 @@ const getStatusClass = (value, threshold, rule = 'range') => {
   return 'text-gray-400';
 };
 
-const MARKET_CAP_THRESHOLD = 10_000_000_000; 
+const formatNumber = (value) => {
+  return Number(value).toFixed(2);
+};
 
 export default function StockTable() {
   const [stocks, setStocks] = useState([]);
@@ -40,7 +41,35 @@ export default function StockTable() {
       .catch(err => console.error(err));
   }, []);
 
-  const filteredStocks = stocks.filter(stock => stock.marketCap >= MARKET_CAP_THRESHOLD);
+  const countCriteriaPassed = (stock) => {
+    let count = 0;
+
+    if (stock.forwardPE >= thresholds.forwardPE[0] && stock.forwardPE <= thresholds.forwardPE[1]) count++;
+    if (stock.trailingPegRatio < thresholds.trailingPegRatio) count++;
+    if (stock.enterpriseToRevenue > thresholds.enterpriseToRevenue) count++;
+    if (stock.enterpriseToEbitda > thresholds.enterpriseToEbitda) count++;
+    if (stock.freeCashflow > thresholds.freeCashflow) count++;
+
+    return count;
+  };
+
+  const hasMissingValue = (stock) => {
+    const requiredFields = [
+      'marketCap',
+      'forwardPE',
+      'trailingPegRatio',
+      'enterpriseToRevenue',
+      'enterpriseToEbitda',
+      'freeCashflow'
+    ];
+    return requiredFields.some(field => stock[field] === null || stock[field] === undefined || isNaN(stock[field]));
+  };
+
+  const filteredStocks = stocks
+    .filter(stock => stock.marketCap >= 10_000_000_000)
+    .filter(stock => !hasMissingValue(stock)) 
+    .map(stock => ({ ...stock, criteriaPassed: countCriteriaPassed(stock) }))
+    .sort((a, b) => b.criteriaPassed - a.criteriaPassed);
 
   return (
     <div className="p-6">
@@ -51,41 +80,43 @@ export default function StockTable() {
             <tr className="bg-gray-100 text-left">
               <th className="px-4 py-2">Ticker</th>
               <th className="px-4 py-2">Company</th>
+              <th className="px-4 py-2">Criteria Passed</th>
               <th className="px-4 py-2">Market Cap (B)</th>
               <th className="px-4 py-2">Forward P/E</th>
               <th className="px-4 py-2">PEG Ratio</th>
               <th className="px-4 py-2">EV/Revenue</th>
               <th className="px-4 py-2">EV/EBITDA</th>
               <th className="px-4 py-2">Free Cash Flow</th>
-              <th className="px-4 py-2">Debt/Equity</th>
             </tr>
           </thead>
           <tbody>
-            {filteredStocks.map(stock => (
-              <tr key={stock.symbol} className="border-b hover:bg-gray-50">
-                <td className="px-4 py-2 font-semibold">{stock.symbol}</td>
-                <td className="px-4 py-2">{stock.name || '—'}</td>
-                <td className="px-4 py-2">{(stock.marketCap / 1e9).toFixed(2)}B</td>
-                <td className={`px-4 py-2 ${getStatusClass(stock.forwardPE, thresholds.forwardPE, 'range')}`}>
-                  {formatNumber(stock.forwardPE)}
-                </td>
-                <td className={`px-4 py-2 ${getStatusClass(stock.trailingPegRatio, thresholds.trailingPegRatio, 'less')}`}>
-                  {formatNumber(stock.trailingPegRatio)}
-                </td>
-                <td className={`px-4 py-2 ${getStatusClass(stock.enterpriseToRevenue, thresholds.enterpriseToRevenue, 'greater')}`}>
-                  {formatNumber(stock.enterpriseToRevenue)}
-                </td>
-                <td className={`px-4 py-2 ${getStatusClass(stock.enterpriseToEbitda, thresholds.enterpriseToEbitda, 'greater')}`}>
-                  {formatNumber(stock.enterpriseToEbitda)}
-                </td>
-                <td className={`px-4 py-2 ${getStatusClass(stock.freeCashflow, thresholds.freeCashflow, 'greater')}`}>
-                  {stock.freeCashflow ? `$${(stock.freeCashflow / 1e9).toFixed(2)}B` : '—'}
-                </td>
-                <td className={`px-4 py-2 ${getStatusClass(stock.debtToEquity, thresholds.debtToEquity, 'less')}`}>
-                  {formatNumber(stock.debtToEquity)}
-                </td>
-              </tr>
-            ))}
+            {filteredStocks.map(stock => {
+              const rowStyle = stock.criteriaPassed <= 3 ? "bg-gray-800 text-gray-400" : "";
+
+              return (
+                <tr key={stock.symbol} className={`border-b hover:bg-gray-50 ${rowStyle}`}>
+                  <td className="px-4 py-2 font-semibold">{stock.symbol}</td>
+                  <td className="px-4 py-2">{stock.name || '—'}</td>
+                  <td className="px-4 py-2">{stock.criteriaPassed}/5</td>
+                  <td className="px-4 py-2">{(stock.marketCap / 1e9).toFixed(2)}B</td>
+                  <td className={`px-4 py-2 ${getStatusClass(stock.forwardPE, thresholds.forwardPE, 'range')}`}>
+                    {formatNumber(stock.forwardPE)}
+                  </td>
+                  <td className={`px-4 py-2 ${getStatusClass(stock.trailingPegRatio, thresholds.trailingPegRatio, 'less')}`}>
+                    {formatNumber(stock.trailingPegRatio)}
+                  </td>
+                  <td className={`px-4 py-2 ${getStatusClass(stock.enterpriseToRevenue, thresholds.enterpriseToRevenue, 'greater')}`}>
+                    {formatNumber(stock.enterpriseToRevenue)}
+                  </td>
+                  <td className={`px-4 py-2 ${getStatusClass(stock.enterpriseToEbitda, thresholds.enterpriseToEbitda, 'greater')}`}>
+                    {formatNumber(stock.enterpriseToEbitda)}
+                  </td>
+                  <td className={`px-4 py-2 ${getStatusClass(stock.freeCashflow, thresholds.freeCashflow, 'greater')}`}>
+                    {stock.freeCashflow ? `$${(stock.freeCashflow / 1e9).toFixed(2)}B` : '—'}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
