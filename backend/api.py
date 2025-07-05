@@ -21,5 +21,5 @@ async def get_stocks():
         data = [dict(row) for row in rows]
         return data
     except Exception as e:
-        print(f"❌ Error fetching stocks: {e}")
+        print(f"Error fetching stocks: {e}")
         raise HTTPException(status_code=500, detail=str(e))

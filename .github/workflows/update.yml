@@ -3,7 +3,7 @@ name: Update Stock Database
 on:
   schedule:
     - cron: '0 * * * *'    
-  workflow_dispatch:          
+  workflow_dispatch:       
 
 jobs:
   update:
@@ -11,7 +11,10 @@ jobs:
 
     defaults:
       run:
-        working-directory: backend   
+        working-directory: backend
+
+    permissions:
+      contents: write   
 
     steps:
       - name: Checkout repo
@@ -20,7 +23,7 @@ jobs:
       - name: Setup Python 3.x
         uses: actions/setup-python@v4
         with:
-          python-version: '3.12'      
+          python-version: '3.12'
 
       - name: Install dependencies
         run: pip install -r requirements.txt
@@ -30,8 +33,10 @@ jobs:
           FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
         run: python update_db.py
 
-      - name: Upload SQLite database artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: stocks-db
-          path: backend/stocks.db
+      - name: Commit and push updated stocks.db
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add stocks.db
+          git commit -m "Auto-update stocks.db [skip ci]" || echo "No changes to commit"
+          git push
