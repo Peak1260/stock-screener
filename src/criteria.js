@@ -1,4 +1,3 @@
-import NavBar from './navbar';
 import { Link } from "react-router-dom";
 
 const criteria = [
@@ -16,7 +15,6 @@ const criteria = [
 export default function StockCriteria() {
   return (
     <div className="min-h-screen bg-gray-100">
-      <NavBar />
       <div className="flex justify-center items-center p-6">
         <div className="bg-white shadow-md rounded p-6 max-w-3xl">
           <h1 className="text-2xl font-bold mb-4 text-center">Stock Selection Criteria</h1>

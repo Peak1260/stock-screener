@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { BrowserRouter as Link } from 'react-router-dom';
+import { Link, Routes, Route } from 'react-router-dom';
 import NavBar from "./navbar";
 import { db } from './firebase';
 import { collection, getDocs } from 'firebase/firestore';
+import Criteria from './criteria';
+import SignIn from './signin';
 
-function App({ user }) {
+function StockScreener({ user }) {
   const [stocks, setStocks] = useState([]);
 
   const thresholds = {
@@ -79,72 +81,84 @@ function App({ user }) {
     .sort((a, b) => b.criteriaPassed - a.criteriaPassed);
 
   return (
+    <>
+      <h1 className="text-2xl font-bold mb-4 flex items-center">
+        Stock Screener
+        <Link
+          to="/criteria"
+          className="text-sm text-blue-500 hover:underline cursor-pointer ml-2"
+        >
+          View Strategy Criteria
+        </Link>
+      </h1>
+      <div className="overflow-auto">
+        <table className="min-w-full table-auto border">
+          <thead>
+            <tr className="bg-gray-100 text-left">
+              <th className="px-4 py-2">Ticker</th>
+              <th className="px-4 py-2">Company</th>
+              <th className="px-4 py-2">Criteria Passed</th>
+              <th className="px-4 py-2">Market Cap (B)</th>
+              <th className="px-4 py-2">Forward P/E</th>
+              <th className="px-4 py-2">PEG Ratio</th>
+              <th className="px-4 py-2">EV/Revenue</th>
+              <th className="px-4 py-2">EV/EBITDA</th>
+              <th className="px-4 py-2">Free Cash Flow</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredStocks.map(stock => {
+              const rowStyle = stock.criteriaPassed <= 3 ? "bg-gray-800 text-gray-400" : "";
+              return (
+                <tr key={stock.symbol} className={`border-b hover:bg-gray-50 ${rowStyle}`}>
+                  <td className="px-4 py-2 font-semibold">{stock.symbol}</td>
+                  <td className="px-4 py-2">
+                    <a
+                      href={`https://finance.yahoo.com/quote/${stock.symbol}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-500 hover:underline"
+                    >
+                      {stock.name}
+                    </a>
+                  </td>
+                  <td className="px-4 py-2">{stock.criteriaPassed}/5</td>
+                  <td className="px-4 py-2">{(stock.marketCap / 1e9).toFixed(2)}B</td>
+                  <td className={`px-4 py-2 ${getStatusClass(stock.forwardPE, thresholds.forwardPE, 'range')}`}>
+                    {formatNumber(stock.forwardPE)}
+                  </td>
+                  <td className={`px-4 py-2 ${getStatusClass(stock.trailingPegRatio, thresholds.trailingPegRatio, 'less')}`}>
+                    {formatNumber(stock.trailingPegRatio)}
+                  </td>
+                  <td className={`px-4 py-2 ${getStatusClass(stock.enterpriseToRevenue, thresholds.enterpriseToRevenue, 'less')}`}>
+                    {formatNumber(stock.enterpriseToRevenue)}
+                  </td>
+                  <td className={`px-4 py-2 ${getStatusClass(stock.enterpriseToEbitda, thresholds.enterpriseToEbitda, 'less')}`}>
+                    {formatNumber(stock.enterpriseToEbitda)}
+                  </td>
+                  <td className={`px-4 py-2 ${getStatusClass(stock.freeCashflow, thresholds.freeCashflow, 'greater')}`}>
+                    {stock.freeCashflow ? `$${(stock.freeCashflow / 1e9).toFixed(2)}B` : '—'}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+function App({ user }) {
+  return (
     <div className="min-h-screen bg-gray-100">
       <NavBar user={user} />
       <div className="p-6">
-        <h1 className="text-2xl font-bold mb-4 flex items-center">
-          Stock Screener
-          <Link
-            to="/criteria"
-            className="text-sm text-blue-500 hover:underline cursor-pointer ml-2"
-          >
-            View Strategy Criteria
-          </Link>
-        </h1>
-        <div className="overflow-auto">
-          <table className="min-w-full table-auto border">
-            <thead>
-              <tr className="bg-gray-100 text-left">
-                <th className="px-4 py-2">Ticker</th>
-                <th className="px-4 py-2">Company</th>
-                <th className="px-4 py-2">Criteria Passed</th>
-                <th className="px-4 py-2">Market Cap (B)</th>
-                <th className="px-4 py-2">Forward P/E</th>
-                <th className="px-4 py-2">PEG Ratio</th>
-                <th className="px-4 py-2">EV/Revenue</th>
-                <th className="px-4 py-2">EV/EBITDA</th>
-                <th className="px-4 py-2">Free Cash Flow</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredStocks.map(stock => {
-                const rowStyle = stock.criteriaPassed <= 3 ? "bg-gray-800 text-gray-400" : "";
-                return (
-                  <tr key={stock.symbol} className={`border-b hover:bg-gray-50 ${rowStyle}`}>
-                    <td className="px-4 py-2 font-semibold">{stock.symbol}</td>
-                    <td className="px-4 py-2">
-                      <a
-                        href={`https://finance.yahoo.com/quote/${stock.symbol}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-500 hover:underline"
-                      >
-                        {stock.name}
-                      </a>
-                    </td>
-                    <td className="px-4 py-2">{stock.criteriaPassed}/5</td>
-                    <td className="px-4 py-2">{(stock.marketCap / 1e9).toFixed(2)}B</td>
-                    <td className={`px-4 py-2 ${getStatusClass(stock.forwardPE, thresholds.forwardPE, 'range')}`}>
-                      {formatNumber(stock.forwardPE)}
-                    </td>
-                    <td className={`px-4 py-2 ${getStatusClass(stock.trailingPegRatio, thresholds.trailingPegRatio, 'less')}`}>
-                      {formatNumber(stock.trailingPegRatio)}
-                    </td>
-                    <td className={`px-4 py-2 ${getStatusClass(stock.enterpriseToRevenue, thresholds.enterpriseToRevenue, 'less')}`}>
-                      {formatNumber(stock.enterpriseToRevenue)}
-                    </td>
-                    <td className={`px-4 py-2 ${getStatusClass(stock.enterpriseToEbitda, thresholds.enterpriseToEbitda, 'less')}`}>
-                      {formatNumber(stock.enterpriseToEbitda)}
-                    </td>
-                    <td className={`px-4 py-2 ${getStatusClass(stock.freeCashflow, thresholds.freeCashflow, 'greater')}`}>
-                      {stock.freeCashflow ? `$${(stock.freeCashflow / 1e9).toFixed(2)}B` : '—'}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <Routes>
+          <Route path="/" element={<StockScreener user={user} />} />
+          <Route path="/criteria" element={<Criteria />} />
+          <Route path="/signin" element={<SignIn />} />
+        </Routes>
       </div>
     </div>
   );
