@@ -1,45 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import NavBar from "./navbar";
-import SignIn from "./signin"; 
-import SignUp from "./signup";
-import StockCriteria from "./criteria"; 
-import { auth } from './firebase';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
-
-export default function App() {
-  const [user, setUser] = useState(null);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      if (currentUser) {
-        if (currentUser.emailVerified) {
-          setUser(currentUser);
-        } else {
-          alert("Please verify your email before to enjoy full access.");
-          signOut(auth);
-          setUser(null);
-        }
-      } else {
-        setUser(null);
-      }
-    });
-    return unsubscribe;
-  }, []);
-
-  return (
-    <Router>
-      <Routes>
-        {/* Pass user to Main so NavBar can show email or sign in */}
-        <Route path="/" element={<Main user={user} />} />
-        <Route path="/criteria" element={<StockCriteria />} />
-        <Route path="/signup" element={<SignUp />} />
-        <Route path="/signin" element={<SignIn />} />
-      </Routes>
-    </Router>
-  );
-}
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from './firebase'; 
 
 function Main({ user }) {
   const [stocks, setStocks] = useState([]);
@@ -74,9 +35,17 @@ function Main({ user }) {
   const formatNumber = (value) => Number(value).toFixed(2);
 
   useEffect(() => {
-    axios.get('http://localhost:8000/stocks')
-      .then(res => setStocks(res.data))
-      .catch(err => console.error(err));
+    async function fetchStocks() {
+      try {
+        const querySnapshot = await getDocs(collection(db, "stocks"));
+        const stocksData = querySnapshot.docs.map(doc => doc.data());
+        setStocks(stocksData);
+      } catch (err) {
+        console.error("Error fetching stocks from Firestore:", err);
+      }
+    }
+
+    fetchStocks();
   }, []);
 
   const countCriteriaPassed = (stock) => {
@@ -102,7 +71,7 @@ function Main({ user }) {
   };
 
   const filteredStocks = stocks
-    .filter(stock => stock.marketCap >= 10_000_000_000)
+    .filter(stock => stock.marketCap > 10_000_000_000)
     .filter(stock => !hasMissingValue(stock))
     .map(stock => ({ ...stock, criteriaPassed: countCriteriaPassed(stock) }))
     .sort((a, b) => b.criteriaPassed - a.criteriaPassed);
@@ -113,7 +82,6 @@ function Main({ user }) {
       <div className="p-6">
         <h1 className="text-2xl font-bold mb-4 flex items-center">
           Stock Screener
-          {/* Use React Router Link here for client side navigation */}
           <Link
             to="/criteria"
             className="text-sm text-blue-500 hover:underline cursor-pointer ml-2"

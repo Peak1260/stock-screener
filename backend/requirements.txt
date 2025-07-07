@@ -7,3 +7,5 @@ databases
 aiosqlite
 yfinance
 python-dotenv
+google-cloud-firestore
+google-auth
