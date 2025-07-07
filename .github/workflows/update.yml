@@ -29,7 +29,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Decode FIREBASE_KEY_JSON
-        run: echo "${{ secrets.FIREBASE_KEY_JSON }}" > serviceAccount.json
+        run: echo "${{ secrets.FIREBASE_KEY_JSON }}" > | base64 --decode > backend/serviceAccount.json
 
       - name: Run update script
         env:
