@@ -24,4 +24,4 @@ yarn-error.log*
 
 .env
 
-backend/serviceAccount.json
+serviceAccount.json
