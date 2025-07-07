@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import { BrowserRouter as Link } from 'react-router-dom';
+import NavBar from "./navbar";
+import { db } from './firebase';
 import { collection, getDocs } from 'firebase/firestore';
-import { db } from './firebase'; 
 
-function Main({ user }) {
+function App({ user }) {
   const [stocks, setStocks] = useState([]);
 
   const thresholds = {
@@ -147,3 +149,5 @@ function Main({ user }) {
     </div>
   );
 }
+
+export default App;
