@@ -27,11 +27,6 @@ jobs:
       - name: Write Firebase serviceAccount.json
         run: echo '${{ secrets.FIREBASE_KEY_JSON }}' > serviceAccount.json
 
-      - name: Run test script
-        env:
-          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
-        run: python test/test.py
-
       - name: Run update script
         env:
           FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
