@@ -7,18 +7,16 @@ const initialCriteria = {
   trailingPegRatio: '',
   enterpriseToEbitda: '',
   operatingMargins: '',
-  earningsGrowth: '',
   revenueGrowth: '',
   returnOnAssets: '',
 };
 
 const tooltips = {
   forwardPE: 'Forward P/E: Less than 20 is considered good',
-  trailingPegRatio: 'PEG Ratio: Less than 1 indicates undervalued stock',
+  trailingPegRatio: 'PEG Ratio: Less than 2 is considered good',
   enterpriseToEbitda: 'EV/EBITDA: Less than 30 is considered good',
   operatingMargins: 'Operating Margin: Higher than 0.1 is considered good',
-  earningsGrowth: 'Earnings Growth: Higher than 0.05 is considered good ',
-  revenueGrowth: 'Revenue Growth: Higher than 0.05 is considered good',
+  revenueGrowth: 'Revenue Growth: Higher than 0.1 is considered good',
   returnOnAssets: 'Return on Assets: Higher than 0.05 is considered good',
 };
 
@@ -27,7 +25,6 @@ const inputLabels = {
   trailingPegRatio: 'PEG (TTM)',
   enterpriseToEbitda: 'EV/EBITDA',
   operatingMargins: 'Operating Margin',
-  earningsGrowth: 'Earnings Growth',
   revenueGrowth: 'Revenue Growth',
   returnOnAssets: 'Return On Assets',
 };
@@ -36,6 +33,9 @@ export default function Analysis() {
   const [criteria, setCriteria] = useState(initialCriteria);
   const [stocks, setStocks] = useState([]);
   const [filtered, setFiltered] = useState([]);
+  const [showWarning, setShowWarning] = useState(false);
+
+  const allFieldsFilled = Object.values(criteria).every(val => val !== '' && !isNaN(val));
 
   useEffect(() => {
     async function fetchStocks() {
@@ -51,6 +51,7 @@ export default function Analysis() {
   }, []);
 
   const handleInputChange = (e) => {
+    setShowWarning(false);
     const rawVal = e.target.value;
     const floatVal = rawVal === '' ? '' : parseFloat(rawVal);
     const roundedVal = typeof floatVal === 'number' && !isNaN(floatVal)
@@ -63,16 +64,17 @@ export default function Analysis() {
   };
 
   const handleSearch = () => {
-    const greaterIsBetter = ['operatingMargins', 'earningsGrowth', 'revenueGrowth', 'returnOnAssets'];
+    if (!allFieldsFilled) {
+      setShowWarning(true);
+      return;
+    }
+
+    const greaterIsBetter = ['operatingMargins', 'revenueGrowth', 'returnOnAssets'];
 
     const filteredStocks = stocks.filter(stock => {
       return Object.entries(criteria).every(([key, userVal]) => {
-        if (userVal === '') return true; 
-
         const stockVal = stock[key];
-
         if (stockVal === null || stockVal === undefined || isNaN(stockVal)) return false;
-
         if (greaterIsBetter.includes(key)) {
           return stockVal > userVal;
         } else {
@@ -82,6 +84,7 @@ export default function Analysis() {
     });
 
     setFiltered(filteredStocks);
+    setShowWarning(false);
   };
 
   const displayValue = (val, isPercent = false) => {
@@ -101,7 +104,7 @@ export default function Analysis() {
             <label className="text-sm capitalize cursor-help">
               {inputLabels[key] || key}
             </label>
-            <div className="absolute left-0 top-full mt-1 w-48 p-2 bg-gray-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+            <div className="absolute left-0 top-full mt-1 w-42 p-2 bg-gray-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
               {tooltips[key]}
             </div>
             <input
@@ -111,66 +114,62 @@ export default function Analysis() {
               value={criteria[key]}
               onChange={handleInputChange}
               className="border px-2 py-1 w-full rounded mt-1"
-              placeholder={['operatingMargins','earningsGrowth','revenueGrowth','returnOnAssets'].includes(key) ? "Decimal (e.g. 0.05 = 5%)" : ""}
+              placeholder={['operatingMargins','revenueGrowth','returnOnAssets'].includes(key) ? "Decimal (e.g. 0.1 = 10%)" : ""}
             />
           </div>
         ))}
       </div>
 
-      {/* Analyze button */}
+      {/* Analyze button with warning */}
       <div className="mb-4">
         <button
           onClick={handleSearch}
-          className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-1 rounded transition"
+          disabled={!allFieldsFilled}
+          className={`px-4 py-1 rounded transition text-white ${
+            allFieldsFilled
+              ? 'bg-blue-500 hover:bg-blue-600'
+              : 'bg-gray-400 cursor-not-allowed'
+          }`}
         >
           Analyze
         </button>
+        {showWarning && (
+          <p className="text-red-500 mt-2 text-sm">
+            Please fill out all fields before analyzing.
+          </p>
+        )}
       </div>
 
       {/* Results table */}
       {filtered.length > 0 ? (
-        <table className="min-w-full border table-auto">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="px-4 py-2">Ticker</th>
-              <th className="px-4 py-2">P/E (FWD)</th>
-              <th className="px-4 py-2">PEG (TTM)</th>
-              <th className="px-4 py-2">EV/EBITDA</th>
-              <th className="px-4 py-2">Operating Margin</th>
-              <th className="px-4 py-2">Earnings Growth</th>
-              <th className="px-4 py-2">Revenue Growth</th>
-              <th className="px-4 py-2">Return On Assets</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(stock => (
-              <tr key={stock.symbol} className="border-t">
-                <td className="px-6 py-2 font-bold">{stock.symbol || '-'}</td>
-                <td className={`px-6 py-2 text-gray-800`}>
-                  {displayValue(stock.forwardPE)}
-                </td>
-                <td className={`px-6 py-2 text-gray-800`}>
-                  {displayValue(stock.trailingPegRatio)}
-                </td>
-                <td className={`px-6 py-2 text-gray-800`}>
-                  {displayValue(stock.enterpriseToEbitda)}
-                </td>
-                <td className={`px-6 py-2 text-gray-800`}>
-                  {displayValue(stock.operatingMargins, true)}
-                </td>
-                <td className={`px-6 py-2 text-gray-800`}>
-                  {displayValue(stock.earningsGrowth, true)}
-                </td>
-                <td className={`px-6 py-2 text-gray-800`}>
-                  {displayValue(stock.revenueGrowth, true)}
-                </td>
-                <td className={`px-6 py-2 text-gray-800`}>
-                  {displayValue(stock.returnOnAssets, true)}
-                </td>
+        <div className="overflow-auto">
+          <table className="min-w-full table-auto border">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="px-4 py-2">Ticker</th>
+                <th className="px-4 py-2">P/E (FWD)</th>
+                <th className="px-4 py-2">PEG (TTM)</th>
+                <th className="px-4 py-2">EV/EBITDA</th>
+                <th className="px-4 py-2">Operating Margin</th>
+                <th className="px-4 py-2">Revenue Growth</th>
+                <th className="px-4 py-2">Return On Assets</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filtered.map(stock => (
+                <tr key={stock.symbol} className="border-t">
+                  <td className="px-6 py-2 font-bold">{stock.symbol || '-'}</td>
+                  <td className="px-6 py-2">{displayValue(stock.forwardPE)}</td>
+                  <td className="px-6 py-2">{displayValue(stock.trailingPegRatio)}</td>
+                  <td className="px-6 py-2">{displayValue(stock.enterpriseToEbitda)}</td>
+                  <td className="px-6 py-2">{displayValue(stock.operatingMargins, true)}</td>
+                  <td className="px-6 py-2">{displayValue(stock.revenueGrowth, true)}</td>
+                  <td className="px-6 py-2">{displayValue(stock.returnOnAssets, true)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : (
         <p className="text-gray-800">No results to display.</p>
       )}
