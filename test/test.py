@@ -1,4 +1,5 @@
 import os
+from tkinter.filedialog import test
 import requests
 import yfinance as yf
 from dotenv import load_dotenv
@@ -22,15 +23,27 @@ cred = service_account.Credentials.from_service_account_file("serviceAccount.jso
 db = firestore.Client(credentials=cred)
 
 def main():
+    # Get all existing stock symbols from Firestore
+    print("Fetching existing symbols from Firestore...")
+    existing_docs = db.collection("total_stocks").stream()
+    existing_symbols = set(doc.id for doc in existing_docs)
+    print(f"Found {len(existing_symbols)} already in database")
+
+    # Get stock list from FMP
+    print("Fetching stock list from FMP...")
     response = requests.get(FMP_URL)
     stocks = response.json()
 
     filtered_tickers = [
         s['symbol'] for s in stocks
-        if (s.get("exchangeShortName") == "NASDAQ" or s.get("exchangeShortName") == "NYSE") and s.get("price", 0) is not None and s.get("price", 0) >= 11.0 and s.get("type") == "stock"
+        if (s.get("exchangeShortName") in {"NASDAQ", "NYSE"})
+        and s.get("price", 0) is not None
+        and s.get("price", 0) >= 11.0
+        and s.get("type") == "stock"
+        and s['symbol'] not in existing_symbols  
     ]
 
-    print(f"Tickers passing exchange: {len(filtered_tickers)}")
+    print(f"Tickers to fetch: {len(filtered_tickers)}")
 
     for ticker in filtered_tickers:
         try:
@@ -55,10 +68,13 @@ def main():
                 "returnOnEquity": info.get("returnOnEquity"),
             }
 
-            db.collection("total_stocks").document(stock_data["symbol"]).set(stock_data)
-            print(f"Added {ticker}")
+            if stock_data["symbol"]:
+                db.collection("total_stocks").document(stock_data["symbol"]).set(stock_data)
+                print(f"Added {ticker}")
+            else:
+                print(f"Skipping {ticker}: No symbol found")
 
-            time.sleep(1)
+            time.sleep(1)  
 
         except urllib.error.HTTPError as e:
             print(f"HTTP error for {ticker}: {e}")
