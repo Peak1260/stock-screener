@@ -12,7 +12,7 @@ const initialCriteria = {
 };
 
 const tooltips = {
-  forwardPE: 'Forward P/E: Less than 20 is considered good',
+  forwardPE: 'Forward P/E: Less than 25 is considered good',
   trailingPegRatio: 'PEG Ratio: Less than 2 is considered good',
   enterpriseToEbitda: 'EV/EBITDA: Less than 30 is considered good',
   operatingMargins: 'Operating Margin: Higher than 0.1 is considered good',
@@ -110,6 +110,7 @@ export default function Analysis() {
             <input
               type="number"
               step="any"
+              min="0"
               name={key}
               value={criteria[key]}
               onChange={handleInputChange}
