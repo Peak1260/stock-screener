@@ -12,7 +12,7 @@ export default function NavBar({ user }) {
         </Link>
       </div>
 
-      <div className="flex items-center gap-8 text-lg font-medium">
+      <div className="flex items-center gap-4 text-xl font-medium">
         <Link
           to="/analysis"
           className="hover:text-blue-500 transition-colors duration-200"
