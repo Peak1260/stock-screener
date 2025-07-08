@@ -21,11 +21,15 @@ export async function fetchCompanyAnalysis(companyName, ticker) {
   const prompt = `
     Analyze the company ${companyName} (Ticker: ${ticker}). Provide the analysis in exactly three distinct paragraphs:
 
-    Paragraph 1: A brief, one-paragraph overview of the company. What is its primary business and what does it sell?
+    Write Company Overview then a brief, one-paragraph overview of the company. What is its primary business and what does it sell?
 
-    Paragraph 2: A bullish case for the company. What are its core strengths, competitive advantages, and potential future growth catalysts?
+    Then a newline for spacing between paragraphs.
 
-    Paragraph 3: A bearish case for the company. What are the primary risks, challenges, and weaknesses it faces?
+    Write Qualities then a bullish case for the company. What are its core strengths, competitive advantages, and potential future growth catalysts?
+
+    Then a newline for spacing between paragraphs.
+
+    Write Risks then a bearish case for the company. What are the primary risks, challenges, and weaknesses it faces?
   `;
 
   try {
