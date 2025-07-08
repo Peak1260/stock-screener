@@ -31,3 +31,8 @@ jobs:
         env:
           FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
         run: python update_db.py
+
+      - name: Run test script
+        env:
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+        run: python test/test.py

@@ -51,7 +51,7 @@ def main():
 
     filtered_tickers = [
         s['symbol'] for s in stocks
-        if (s.get("exchange") == "NASDAQ" or s.get("exchangeShortName") == "NYSE") and s.get("price", 0) is not None and s.get("price", 0) >= 11.0 and s.get("type") == "stock"
+        if (s.get("exchangeShortName") == "NASDAQ" or s.get("exchangeShortName") == "NYSE") and s.get("price", 0) is not None and s.get("price", 0) >= 11.0 and s.get("type") == "stock"
     ]
 
     print(f"Tickers passing exchange: {len(filtered_tickers)}")

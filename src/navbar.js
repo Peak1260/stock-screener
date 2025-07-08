@@ -1,26 +1,38 @@
 import { Link } from "react-router-dom";
 import React from "react";
-import dingerLogo from "./dinger.png"; 
+import dingerLogo from "./dinger.png";
 
 export default function NavBar({ user }) {
   return (
-    <div className="flex justify-between items-center px-6 py-3 bg-logo-background text-white">
+    <nav className="flex justify-between items-center px-8 py-4 bg-logo-background text-white shadow-md">
       <div className="flex items-center">
         <img src={dingerLogo} alt="Dinger App Logo" className="h-10 w-10" />
-        <div className="text-3xl font-bold">Dinger</div>
+        <Link to="/" className="text-3xl font-extrabold">
+          Dinger
+        </Link>
       </div>
 
-      <div>
+      <div className="flex items-center gap-8 text-lg font-medium">
+        <Link
+          to="/analysis"
+          className="hover:text-blue-500 transition-colors duration-200"
+        >
+          Analysis
+        </Link>
+
         {user ? (
-          <div className="flex items-center gap-4">
-            <span>{user.email}</span>
-          </div>
+          <span className="truncate max-w-xs" title={user.email}>
+            {user.email}
+          </span>
         ) : (
-          <Link to="/signin" className="text-blue-500 text-lg hover:underline">
+          <Link
+            to="/signin"
+            className="hover:text-blue-500 transition-colors duration-200"
+          >
             Sign In
           </Link>
         )}
       </div>
-    </div>
+    </nav>
   );
 }
