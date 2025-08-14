@@ -38,7 +38,7 @@ def main():
         s['symbol'] for s in stocks
         if (s.get("exchangeShortName") in {"NASDAQ", "NYSE"})
         and s.get("price", 0) is not None
-        and s.get("price", 0) >= 11.0
+        and s.get("price", 0) > 10.0
         and s.get("type") == "stock"
         and s['symbol'] not in existing_symbols  
     ]

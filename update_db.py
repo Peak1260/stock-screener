@@ -22,11 +22,11 @@ cred = service_account.Credentials.from_service_account_file("serviceAccount.jso
 db = firestore.Client(credentials=cred)
 
 FILTERS = {
-    "grossMargins": 0.45,
+    "grossMargins": 0.50,
     "ebitdaMargins": 0.15,
     "operatingMargins": 0.10,
-    "earningsGrowth": 0.08,
-    "revenueGrowth": 0.08,
+    "earningsGrowth": 0.09,
+    "revenueGrowth": 0.09,
     "returnOnAssets": 0.05,
     "returnOnEquity": 0.20,
 }
@@ -51,7 +51,7 @@ def main():
 
     filtered_tickers = [
         s['symbol'] for s in stocks
-        if (s.get("exchangeShortName") == "NASDAQ" or s.get("exchangeShortName") == "NYSE") and s.get("price", 0) is not None and s.get("price", 0) >= 11.0 and s.get("type") == "stock"
+        if (s.get("exchangeShortName") == "NASDAQ" or s.get("exchangeShortName") == "NYSE") and s.get("price", 0) is not None and s.get("price", 0) > 10.0 and s.get("type") == "stock"
     ]
 
     print(f"Tickers passing exchange: {len(filtered_tickers)}")

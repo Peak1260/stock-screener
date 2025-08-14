@@ -1,11 +1,11 @@
 import { Link } from "react-router-dom";
 
 const criteria = [
-  { label: "Gross Margins", value: "> 45%" },
+  { label: "Gross Margins", value: "> 50%" },
   { label: "EBITDA Margins", value: "> 15%" },
   { label: "Operating Margins", value: "> 10%" },
-  { label: "Earnings Growth", value: "> 8%" },
-  { label: "Revenue Growth", value: "> 8%" },
+  { label: "Earnings Growth", value: "> 9%" },
+  { label: "Revenue Growth", value: "> 9%" },
   { label: "Return on Assets", value: "> 5%" },
   { label: "Return on Equity", value: "> 20%" },
   { label: "Market Cap", value: "> $10 billion" },
