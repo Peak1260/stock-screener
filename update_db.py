@@ -25,7 +25,15 @@ if not API_KEY:
 FMP_URL = f"https://financialmodelingprep.com/api/v3/stock/list?apikey={API_KEY}"
 
 # Load Firebase credentials
-cred = service_account.Credentials.from_service_account_file("src/serviceAccount.json")
+firebase_creds = os.getenv("FIREBASE_KEY_JSON")
+if firebase_creds:
+    # Running in GitHub Actions - use environment variable
+    service_account_info = json.loads(firebase_creds)
+    cred = service_account.Credentials.from_service_account_info(service_account_info)
+else:
+    # Running locally - use service account file
+    cred = service_account.Credentials.from_service_account_file("src/serviceAccount.json")
+
 db = firestore.Client(credentials=cred)
 
 FILTERS = {
