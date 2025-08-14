@@ -1,5 +1,6 @@
 import os
 import requests
+import random
 import yfinance as yf
 from dotenv import load_dotenv
 from pathlib import Path
@@ -90,7 +91,7 @@ def main():
             db.collection("stocks").document(stock_data["symbol"]).set(stock_data)
             print(f"Added {ticker}")
 
-            time.sleep(2)
+            time.sleep(3 + random.uniform(0.5, 1))
 
         except urllib.error.HTTPError as e:
             print(f"HTTP error for {ticker}: {e}")
