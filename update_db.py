@@ -49,9 +49,12 @@ def main():
     response = requests.get(FMP_URL)
     stocks = response.json()
 
+    existing_docs = db.collection("stocks").stream()
+    existing_symbols = set(doc.id for doc in existing_docs)
+
     filtered_tickers = [
         s['symbol'] for s in stocks
-        if (s.get("exchangeShortName") == "NASDAQ" or s.get("exchangeShortName") == "NYSE") and s.get("price", 0) is not None and s.get("price", 0) > 10.0 and s.get("type") == "stock"
+        if (s.get("exchangeShortName") == "NASDAQ" or s.get("exchangeShortName") == "NYSE") and s.get("price", 0) is not None and s.get("price", 0) > 10.0 and s.get("type") == "stock" and s['symbol'] not in existing_symbols 
     ]
 
     print(f"Tickers passing exchange: {len(filtered_tickers)}")
