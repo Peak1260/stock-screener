@@ -11,15 +11,21 @@ import json
 from google.cloud import firestore
 from google.oauth2 import service_account
 
-# Load .env from parent directory
-env_path = Path(__file__).resolve().parent.parent / '.env'
-load_dotenv(dotenv_path=env_path)
+env_path = Path(__file__).parent / ".env"
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path, override=False)
 
 API_KEY = os.getenv("FMP_API_KEY")
+if not API_KEY:
+    raise ValueError(
+        "FMP_API_KEY not found. Set it in your .env for local dev "
+        "or as a GitHub Actions secret for CI."
+    )
+
 FMP_URL = f"https://financialmodelingprep.com/api/v3/stock/list?apikey={API_KEY}"
 
 # Load Firebase credentials
-cred = service_account.Credentials.from_service_account_file("serviceAccount.json")
+cred = service_account.Credentials.from_service_account_file("src/serviceAccount.json")
 db = firestore.Client(credentials=cred)
 
 FILTERS = {
