@@ -11,6 +11,7 @@ import json
 from google.cloud import firestore
 from google.oauth2 import service_account
 
+# Load environment variables
 env_path = Path(__file__).parent / ".env"
 if env_path.exists():
     load_dotenv(dotenv_path=env_path, override=False)
@@ -24,21 +25,10 @@ if not API_KEY:
 
 FMP_URL = f"https://financialmodelingprep.com/api/v3/stock/list?apikey={API_KEY}"
 
-# Load Firebase credentials
-firebase_creds = os.getenv("FIREBASE_KEY_JSON")
-print(f"Firebase creds available: {firebase_creds is not None}")
-if firebase_creds:
-    # Running in GitHub Actions - use environment variable
-    print("Using environment variable for Firebase credentials")
-    service_account_info = json.loads(firebase_creds)
-    cred = service_account.Credentials.from_service_account_info(service_account_info)
-else:
-    # Running locally - use service account file
-    print("Using local service account file")
-    cred = service_account.Credentials.from_service_account_file("src/serviceAccount.json")
-
+cred = service_account.Credentials.from_service_account_file("src/serviceAccount.json")
 db = firestore.Client(credentials=cred)
 
+# Filtering thresholds
 FILTERS = {
     "grossMargins": 0.50,
     "ebitdaMargins": 0.15,
@@ -51,6 +41,7 @@ FILTERS = {
 }
 
 def passes_filters(info):
+    """Apply custom filters to Yahoo Finance data."""
     try:
         return (
             info.get("grossMargins", 0) > FILTERS["grossMargins"] and
@@ -65,6 +56,62 @@ def passes_filters(info):
     except Exception:
         return False
 
+def fetch_in_batches(tickers, batch_size=200):
+    all_results = []
+    total_batches = (len(tickers) + batch_size - 1) // batch_size
+
+    for i in range(0, len(tickers), batch_size):
+        batch_num = i // batch_size + 1
+        batch = tickers[i:i + batch_size]
+        print(f"Processing batch {batch_num}/{total_batches} ({len(batch)} tickers)")
+
+        try:
+            data = yf.Tickers(" ".join(batch))
+        except Exception as e:
+            print(f"Batch {batch_num} fetch failed: {e}")
+            continue
+
+        added_count = 0
+        for symbol in batch:
+            try:
+                t = data.tickers.get(symbol)
+                if not t:
+                    continue
+                info = t.info
+                if not info or not passes_filters(info):
+                    continue
+
+                stock_data = {
+                    "symbol": info.get("symbol"),
+                    "name": info.get("shortName"),
+                    "marketCap": info.get("marketCap"),
+                    "grossMargins": info.get("grossMargins"),
+                    "ebitdaMargins": info.get("ebitdaMargins"),
+                    "operatingMargins": info.get("operatingMargins"),
+                    "earningsGrowth": info.get("earningsGrowth"),
+                    "revenueGrowth": info.get("revenueGrowth"),
+                    "forwardPE": info.get("forwardPE"),
+                    "trailingPegRatio": info.get("trailingPegRatio"),
+                    "enterpriseToRevenue": info.get("enterpriseToRevenue"),
+                    "enterpriseToEbitda": info.get("enterpriseToEbitda"),
+                    "freeCashflow": info.get("freeCashflow"),
+                    "returnOnAssets": info.get("returnOnAssets"),
+                    "returnOnEquity": info.get("returnOnEquity"),
+                }
+                all_results.append(stock_data)
+
+                db.collection("stocks").document(stock_data["symbol"]).set(stock_data)
+                added_count += 1
+            except urllib.error.HTTPError as e:
+                print(f"HTTP error for {symbol}: {e}")
+            except Exception as e:
+                print(f"Error for {symbol}: {e}")
+
+        print(f"Batch {batch_num} complete: {added_count} added")
+        time.sleep(random.uniform(4, 6))
+
+    return all_results
+
 def main():
     response = requests.get(FMP_URL)
     stocks = response.json()
@@ -74,46 +121,18 @@ def main():
 
     filtered_tickers = [
         s['symbol'] for s in stocks
-        if (s.get("exchange") == "NASDAQ Global Select" or s.get("exchange") == "NASDAQ Global Market" or s.get("exchangeShortName") == "NYSE") and s.get("price", 0) is not None and s.get("price", 0) > 10.0 and s.get("type") == "stock" and s['symbol'] not in existing_symbols and len(s['symbol']) <= 4
+        if (
+            s.get("exchange") in ["NASDAQ Global Select", "NASDAQ Global Market"] or
+            s.get("exchangeShortName") == "NYSE"
+        ) and s.get("price", 0) > 10.0
+        and s.get("type") == "stock"
+        and s['symbol'] not in existing_symbols
+        and len(s['symbol']) <= 4
     ]
 
-    print(f"Tickers passing exchange: {len(filtered_tickers)}")
+    print(f"Tickers passing exchange filter: {len(filtered_tickers)}")
 
-    for ticker in filtered_tickers:
-        try:
-            yf_ticker = yf.Ticker(ticker)
-            info = yf_ticker.info
-
-            if not info or not passes_filters(info):
-                continue
-
-            stock_data = {
-                "symbol": info.get("symbol"),
-                "name": info.get("shortName"),
-                "marketCap": info.get("marketCap"),
-                "grossMargins": info.get("grossMargins"),
-                "ebitdaMargins": info.get("ebitdaMargins"),
-                "operatingMargins": info.get("operatingMargins"),
-                "earningsGrowth": info.get("earningsGrowth"),
-                "revenueGrowth": info.get("revenueGrowth"),
-                "forwardPE": info.get("forwardPE"),
-                "trailingPegRatio": info.get("trailingPegRatio"),
-                "enterpriseToRevenue": info.get("enterpriseToRevenue"),
-                "enterpriseToEbitda": info.get("enterpriseToEbitda"),
-                "freeCashflow": info.get("freeCashflow"),
-                "returnOnAssets": info.get("returnOnAssets"),
-                "returnOnEquity": info.get("returnOnEquity"),
-            }
-
-            db.collection("stocks").document(stock_data["symbol"]).set(stock_data)
-            print(f"Added {ticker}")
-
-            time.sleep(3 + random.uniform(1, 1.5))
-
-        except urllib.error.HTTPError as e:
-            print(f"HTTP error for {ticker}: {e}")
-        except Exception as e:
-            print(f"Error for {ticker}: {e}")
+    fetch_in_batches(filtered_tickers)
 
 if __name__ == "__main__":
     main()
