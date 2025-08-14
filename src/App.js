@@ -15,7 +15,6 @@ function StockScreener({ user }) {
     trailingPegRatio: 2,
     enterpriseToRevenue: 15,
     enterpriseToEbitda: 30,
-    freeCashflow: 0,
   };
 
   const getStatusClass = (value, threshold, rule = 'range') => {
@@ -70,7 +69,7 @@ function StockScreener({ user }) {
       'trailingPegRatio',
       'enterpriseToRevenue',
       'enterpriseToEbitda',
-      'freeCashflow'
+      'revenueGrowth',
     ];
     return requiredFields.some(field => stock[field] === null || stock[field] === undefined || isNaN(stock[field]));
   };
@@ -104,7 +103,7 @@ function StockScreener({ user }) {
               <th className="px-4 py-2">PEG Ratio</th>
               <th className="px-4 py-2">EV/Revenue</th>
               <th className="px-4 py-2">EV/EBITDA</th>
-              <th className="px-4 py-2">Free Cash Flow</th>
+              <th className="px-4 py-2">Revenue Growth</th>
             </tr>
           </thead>
           <tbody>
@@ -137,8 +136,8 @@ function StockScreener({ user }) {
                   <td className={`px-4 py-2 ${getStatusClass(stock.enterpriseToEbitda, thresholds.enterpriseToEbitda, 'less')}`}>
                     {formatNumber(stock.enterpriseToEbitda)}
                   </td>
-                  <td className={`px-4 py-2 ${getStatusClass(stock.freeCashflow, thresholds.freeCashflow, 'greater')}`}>
-                    {stock.freeCashflow ? `$${(stock.freeCashflow / 1e9).toFixed(2)}B` : '—'}
+                  <td className={`px-4 py-2 ${getStatusClass(stock.revenueGrowth, thresholds.revenueGrowth, 'greater')}`}>
+                    {stock.revenueGrowth ? `${(stock.revenueGrowth * 100).toFixed(2)}%` : '—'}
                   </td>
                 </tr>
               );

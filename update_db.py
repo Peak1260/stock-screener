@@ -26,7 +26,6 @@ FILTERS = {
     "ebitdaMargins": 0.15,
     "operatingMargins": 0.10,
     "earningsGrowth": 0.09,
-    "revenueGrowth": 0.09,
     "returnOnAssets": 0.05,
     "returnOnEquity": 0.20,
     "freeCashflow": 0.0
@@ -39,7 +38,6 @@ def passes_filters(info):
             info.get("ebitdaMargins", 0) > FILTERS["ebitdaMargins"] and
             info.get("operatingMargins", 0) > FILTERS["operatingMargins"] and
             info.get("earningsGrowth", 0) > FILTERS["earningsGrowth"] and
-            info.get("revenueGrowth", 0) > FILTERS["revenueGrowth"] and
             info.get("returnOnAssets", 0) > FILTERS["returnOnAssets"] and
             info.get("returnOnEquity", 0) > FILTERS["returnOnEquity"] and
             info.get("freeCashflow", 0) > FILTERS["freeCashflow"]
