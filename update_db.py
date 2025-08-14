@@ -88,7 +88,7 @@ def main():
             db.collection("stocks").document(stock_data["symbol"]).set(stock_data)
             print(f"Added {ticker}")
 
-            time.sleep(1)
+            time.sleep(2)
 
         except urllib.error.HTTPError as e:
             print(f"HTTP error for {ticker}: {e}")
