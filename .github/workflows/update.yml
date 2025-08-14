@@ -25,7 +25,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Write Firebase serviceAccount.json
-        run: echo '${{ secrets.FIREBASE_KEY_JSON }}' > serviceAccount.json
+        run: echo '${{ secrets.FIREBASE_KEY_JSON }}' > src/serviceAccount.json
 
       - name: Run update script
         env:
