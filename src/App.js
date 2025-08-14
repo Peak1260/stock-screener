@@ -15,6 +15,7 @@ function StockScreener({ user }) {
     trailingPegRatio: 2,
     enterpriseToRevenue: 15,
     enterpriseToEbitda: 30,
+    revenueGrowth: 0.1,
   };
 
   const getStatusClass = (value, threshold, rule = 'range') => {
@@ -58,7 +59,7 @@ function StockScreener({ user }) {
     if (stock.trailingPegRatio < thresholds.trailingPegRatio) count++;
     if (stock.enterpriseToRevenue < thresholds.enterpriseToRevenue) count++;
     if (stock.enterpriseToEbitda < thresholds.enterpriseToEbitda) count++;
-    if (stock.freeCashflow > thresholds.freeCashflow) count++;
+    if (stock.revenueGrowth > thresholds.revenueGrowth) count++;
     return count;
   };
 
