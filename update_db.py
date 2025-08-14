@@ -57,7 +57,7 @@ def main():
 
     filtered_tickers = [
         s['symbol'] for s in stocks
-        if (s.get("exchangeShortName") == "NASDAQ" or s.get("exchangeShortName") == "NYSE") and s.get("price", 0) is not None and s.get("price", 0) > 10.0 and s.get("type") == "stock" and s['symbol'] not in existing_symbols 
+        if (s.get("exchange") == "NASDAQ Global Select" or s.get("exchange") == "NASDAQ Global Market" or s.get("exchangeShortName") == "NYSE") and s.get("price", 0) is not None and s.get("price", 0) > 10.0 and s.get("type") == "stock" and s['symbol'] not in existing_symbols and len(s['symbol']) <= 4
     ]
 
     print(f"Tickers passing exchange: {len(filtered_tickers)}")
@@ -91,7 +91,7 @@ def main():
             db.collection("stocks").document(stock_data["symbol"]).set(stock_data)
             print(f"Added {ticker}")
 
-            time.sleep(3 + random.uniform(0.5, 1))
+            time.sleep(3 + random.uniform(1, 1.5))
 
         except urllib.error.HTTPError as e:
             print(f"HTTP error for {ticker}: {e}")

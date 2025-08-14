@@ -5,7 +5,7 @@ const criteria = [
   { label: "EBITDA Margins", value: "> 15%" },
   { label: "Operating Margins", value: "> 10%" },
   { label: "Earnings Growth", value: "> 10%" },
-  { label: "Revenue Growth", value: "> 10%" },
+  { label: "Revenue Growth", value: "> 5%" },
   { label: "Return on Assets", value: "> 5%" },
   { label: "Return on Equity", value: "> 20%" },
   { label: "Free Cash Flow", value: "> $0" },
