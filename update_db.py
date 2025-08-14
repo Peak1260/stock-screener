@@ -29,6 +29,7 @@ FILTERS = {
     "revenueGrowth": 0.09,
     "returnOnAssets": 0.05,
     "returnOnEquity": 0.20,
+    "freeCashflow": 0.0
 }
 
 def passes_filters(info):
@@ -40,7 +41,8 @@ def passes_filters(info):
             info.get("earningsGrowth", 0) > FILTERS["earningsGrowth"] and
             info.get("revenueGrowth", 0) > FILTERS["revenueGrowth"] and
             info.get("returnOnAssets", 0) > FILTERS["returnOnAssets"] and
-            info.get("returnOnEquity", 0) > FILTERS["returnOnEquity"]
+            info.get("returnOnEquity", 0) > FILTERS["returnOnEquity"] and
+            info.get("freeCashflow", 0) > FILTERS["freeCashflow"]
         )
     except Exception:
         return False

@@ -8,6 +8,7 @@ const criteria = [
   { label: "Revenue Growth", value: "> 9%" },
   { label: "Return on Assets", value: "> 5%" },
   { label: "Return on Equity", value: "> 20%" },
+  { label: "Free Cash Flow", value: "> $0" },
   { label: "Market Cap", value: "> $10 billion" },
   { label: "Exchange", value: "NYSE or NASDAQ" },
 ];
