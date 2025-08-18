@@ -56,7 +56,7 @@ def passes_filters(info):
     except Exception:
         return False
 
-def fetch_in_batches(tickers, batch_size=200):
+def fetch_in_batches(tickers, batch_size=300):
     all_results = []
     total_batches = (len(tickers) + batch_size - 1) // batch_size
 
@@ -108,7 +108,7 @@ def fetch_in_batches(tickers, batch_size=200):
                 print(f"Error for {symbol}: {e}")
 
         print(f"Batch {batch_num} complete: {added_count} added")
-        time.sleep(random.uniform(4, 6))
+        time.sleep(random.uniform(5, 8))
 
     return all_results
 
@@ -124,7 +124,7 @@ def main():
         if (
             s.get("exchange") in ["NASDAQ Global Select", "NASDAQ Global Market"] or
             s.get("exchangeShortName") == "NYSE"
-        ) and s.get("price", 0) > 10.0
+        ) and s.get("price", 0) > 15.0
         and s.get("type") == "stock"
         and s['symbol'] not in existing_symbols
         and len(s['symbol']) <= 4
