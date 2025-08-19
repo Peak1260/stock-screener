@@ -122,9 +122,9 @@ def main():
     filtered_tickers = [
         s['symbol'] for s in stocks
         if (
-            s.get("exchange") in ["NASDAQ Global Select", "NASDAQ Global Market"] or
+            s.get("exchange") == "NASDAQ Global Select" or
             s.get("exchangeShortName") == "NYSE"
-        ) and s.get("price", 0) > 15.0
+        ) and s.get("price", 0) > 20.0
         and s.get("type") == "stock"
         and s['symbol'] not in existing_symbols
         and len(s['symbol']) <= 4
