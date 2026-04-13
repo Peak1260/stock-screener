@@ -12,13 +12,13 @@ const WATCHLIST_COL = 'watchlist';
 // Technical indicator calculations (computed from raw candle data)
 // ---------------------------------------------------------------------------
 function calcSMA(closes, period) {
-  if (closes.length < period) return null;
+  if (!closes || closes.length < period) return null;
   const slice = closes.slice(-period);
   return slice.reduce((a, b) => a + b, 0) / period;
 }
 
 function calcRSI(closes, period = 14) {
-  if (closes.length < period + 1) return null;
+  if (!closes || closes.length < period + 1) return null;
   const slice = closes.slice(-(period + 1));
   let gains = 0, losses = 0;
   for (let i = 1; i < slice.length; i++) {
@@ -34,7 +34,7 @@ function calcRSI(closes, period = 14) {
 }
 
 function calcEMA(closes, period) {
-  if (closes.length < period) return null;
+  if (!closes || closes.length < period) return null;
   const k = 2 / (period + 1);
   let ema = closes.slice(0, period).reduce((a, b) => a + b, 0) / period;
   for (let i = period; i < closes.length; i++) {
@@ -44,6 +44,7 @@ function calcEMA(closes, period) {
 }
 
 function calcMACD(closes) {
+  if (!closes || closes.length === 0) return null;
   const ema12 = calcEMA(closes, 12);
   const ema26 = calcEMA(closes, 26);
   if (ema12 === null || ema26 === null) return null;
@@ -144,9 +145,10 @@ function StockDetail({ ticker, onClose }) {
           candleRes.json(),
         ]);
 
+        // FIX: Safely extract closing prices from the Finnhub candle response array "c"
+        const closes = candle?.s === 'ok' ? candle.c : [];
+
         // Compute technicals from daily close prices
-        console.log(`Candle response for ${ticker}:`, candle);
-        const closes = (candle?.s === 'ok' && candle?.c) ? candle.c : [];
         const sma20  = calcSMA(closes, 20);
         const rsi14  = calcRSI(closes, 14);
         const macd   = calcMACD(closes);
@@ -185,7 +187,7 @@ function StockDetail({ ticker, onClose }) {
 
   if (!data) return null;
 
-  const { quote, profile, m, closes, sma20, rsi14, macd } = data;
+  const { quote, profile, m, sma20, rsi14, macd } = data;
   const price     = quote?.c ?? 0;
   const change    = quote?.d ?? 0;
   const changePct = quote?.dp ?? 0;

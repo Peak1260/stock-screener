@@ -16,7 +16,7 @@ const genAI = new GoogleGenerativeAI(API_KEY);
  * @returns {Promise<string>} The generated text analysis.
  */
 export async function fetchCompanyAnalysis(companyName, ticker) {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
   const prompt = `
     Analyze the company ${companyName} (Ticker: ${ticker}). Provide the analysis in exactly three distinct paragraphs:

@@ -76,10 +76,12 @@ function StockScreener({ user }) {
   };
 
   const filteredStocks = stocks
-    .filter(stock => stock.marketCap > 10_000_000_000)
+    .filter(stock => stock.marketCap > 1_000_000_000)
     .filter(stock => !hasMissingValue(stock))
     .map(stock => ({ ...stock, criteriaPassed: countCriteriaPassed(stock) }))
     .sort((a, b) => b.criteriaPassed - a.criteriaPassed);
+
+  console.log("2. Data after filtering:", filteredStocks);
 
   return (
     <>

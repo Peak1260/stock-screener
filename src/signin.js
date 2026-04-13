@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { signInWithEmailAndPassword, signInWithPopup } from "firebase/auth";
+import { signInWithEmailAndPassword, signInWithRedirect, getRedirectResult } from "firebase/auth";
 import { auth, googleProvider } from "./firebase";
 import { Link } from "react-router-dom";
 
@@ -8,6 +8,23 @@ export default function SignIn() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleRedirect = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result && result.user) {
+          // If they successfully logged in via Google, send them to the home page
+          navigate("/");
+        }
+      } catch (err) {
+        console.error("Google redirect login error:", err);
+        alert(err.message);
+      }
+    };
+    
+    handleRedirect();
+  }, [navigate]);
 
   const signIn = async (e) => {
     e.preventDefault();
@@ -21,8 +38,7 @@ export default function SignIn() {
 
   const signInWithGoogle = async () => {
     try {
-      await signInWithPopup(auth, googleProvider);
-      navigate("/");
+      await signInWithRedirect(auth, googleProvider);
     } catch (err) {
       alert(err.message);
     }
