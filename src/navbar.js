@@ -38,10 +38,10 @@ export default function NavBar({ user }) {
 
       <div className="flex items-center gap-8 text-lg font-medium">
         <Link
-          to="/analysis"
+          to="/watchlist"
           className="hover:text-blue-500 transition-colors duration-200"
         >
-          Analysis
+          Watchlist
         </Link>
 
         {user ? (

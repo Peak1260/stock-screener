@@ -5,7 +5,7 @@ import { db } from './firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import Criteria from './criteria';
 import SignIn from './signin';
-import Analysis from './analysis';
+import Watchlist from './watchlist';
 
 function StockScreener({ user }) {
   const [stocks, setStocks] = useState([]);
@@ -158,7 +158,7 @@ function App({ user }) {
         <Routes>
           <Route path="/" element={<StockScreener user={user} />} />
           <Route path="/criteria" element={<Criteria />} />
-          <Route path="/analysis" element={<Analysis />} />
+          <Route path="/watchlist" element={<Watchlist />} />
           <Route path="/signin" element={<SignIn />} />
         </Routes>
       </div>

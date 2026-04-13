@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 import time
 import urllib.error
-import json
+import csv
 
 from google.cloud import firestore
 from google.oauth2 import service_account
@@ -16,17 +16,8 @@ env_path = Path(__file__).parent / ".env"
 if env_path.exists():
     load_dotenv(dotenv_path=env_path, override=False)
 
-API_KEY = os.getenv("FMP_API_KEY")
-if not API_KEY:
-    raise ValueError(
-        "FMP_API_KEY not found. Set it in your .env for local dev "
-        "or as a GitHub Actions secret for CI."
-    )
-
-FMP_URL = f"https://financialmodelingprep.com/api/v3/stock/list?apikey={API_KEY}"
-
 cred = service_account.Credentials.from_service_account_file("src/serviceAccount.json")
-db = firestore.Client(credentials=cred)
+db = firestore.Client(credentials=cred, database="stock-screener")
 
 # Filtering thresholds
 FILTERS = {
@@ -39,6 +30,51 @@ FILTERS = {
     "returnOnEquity": 0.20,
     "freeCashflow": 0.0
 }
+
+
+def get_tickers_from_nasdaq():
+    """
+    Download ticker lists directly from NASDAQ Trader's public FTP files.
+    No API key required. Covers NASDAQ + NYSE + other US exchanges.
+    Files are pipe-delimited with a metadata line at the end.
+    """
+    tickers = set()
+
+    ftp_urls = [
+        "https://www.nasdaqtrader.com/dynamic/symdir/nasdaqlisted.txt",
+        "https://www.nasdaqtrader.com/dynamic/symdir/otherlisted.txt",
+    ]
+
+    headers = {"User-Agent": "Mozilla/5.0"}
+
+    for url in ftp_urls:
+        try:
+            resp = requests.get(url, headers=headers, timeout=15)
+            resp.raise_for_status()
+            lines = resp.text.splitlines()
+
+            # First line is header, last line is a file-created timestamp -- skip it
+            reader = csv.DictReader(lines[:-1], delimiter="|")
+            for row in reader:
+                symbol = row.get("Symbol", "").strip()
+                test_issue = row.get("Test Issue", "").strip()
+                etf = row.get("ETF", "").strip()
+
+                if (
+                    symbol
+                    and test_issue == "N"
+                    and etf == "N"
+                    and len(symbol) <= 4
+                    and symbol.isalpha()
+                ):
+                    tickers.add(symbol)
+
+            print(f"Fetched {url.split('/')[-1]}: running total {len(tickers)} tickers")
+        except Exception as e:
+            print(f"Failed to fetch {url}: {e}")
+
+    return list(tickers)
+
 
 def passes_filters(info):
     """Apply custom filters to Yahoo Finance data."""
@@ -56,83 +92,119 @@ def passes_filters(info):
     except Exception:
         return False
 
-def fetch_in_batches(tickers, batch_size=200):
-    all_results = []
-    total_batches = (len(tickers) + batch_size - 1) // batch_size
 
-    for i in range(0, len(tickers), batch_size):
-        batch_num = i // batch_size + 1
-        batch = tickers[i:i + batch_size]
-        print(f"Processing batch {batch_num}/{total_batches} ({len(batch)} tickers)")
-
+def fetch_ticker_with_retry(symbol, max_retries=2):
+    """
+    Fetch a single ticker's info with exponential backoff on rate limit errors.
+    Returns info dict or None if all retries fail.
+    """
+    for attempt in range(max_retries):
         try:
-            data = yf.Tickers(" ".join(batch))
+            t = yf.Ticker(symbol)
+            info = t.info
+
+            # yfinance sometimes returns a minimal stub dict on rate limit
+            # instead of raising -- detect this by checking for a key field
+            if not info or len(info) < 10:
+                raise ValueError(f"Suspiciously thin info dict ({len(info)} keys)")
+
+            return info
+
         except Exception as e:
-            print(f"Batch {batch_num} fetch failed: {e}")
+            err = str(e).lower()
+            is_rate_limit = any(x in err for x in ["429", "too many", "rate limit", "thin info", "suspiciously"])
+
+            if attempt < max_retries - 1:
+                # Exponential backoff: 10-20s, 20-40s
+                sleep_time = (2 ** attempt) * random.uniform(10, 20)
+                if is_rate_limit:
+                    print(f"  Rate limited on {symbol} (attempt {attempt+1}), sleeping {sleep_time:.0f}s...")
+                else:
+                    print(f"  Error on {symbol} (attempt {attempt+1}): {e}, retrying in {sleep_time:.0f}s...")
+                time.sleep(sleep_time)
+            else:
+                print(f"  Giving up on {symbol} after {max_retries} attempts: {e}")
+                return None
+
+    return None
+
+
+def fetch_in_batches(tickers):
+    """
+    Fetch tickers one at a time with retry logic and paced sleeping.
+    Avoids bulk yf.Tickers() which is harder to recover from mid-batch.
+    """
+    all_results = []
+    total = len(tickers)
+
+    for i, symbol in enumerate(tickers):
+        print(f"[{i+1}/{total}] Fetching {symbol}...")
+
+        info = fetch_ticker_with_retry(symbol)
+        if not info:
             continue
 
-        added_count = 0
-        for symbol in batch:
-            try:
-                t = data.tickers.get(symbol)
-                if not t:
-                    continue
-                info = t.info
-                if not info or not passes_filters(info):
-                    continue
+        if not passes_filters(info):
+            continue
 
-                stock_data = {
-                    "symbol": info.get("symbol"),
-                    "name": info.get("shortName"),
-                    "marketCap": info.get("marketCap"),
-                    "grossMargins": info.get("grossMargins"),
-                    "ebitdaMargins": info.get("ebitdaMargins"),
-                    "operatingMargins": info.get("operatingMargins"),
-                    "earningsGrowth": info.get("earningsGrowth"),
-                    "revenueGrowth": info.get("revenueGrowth"),
-                    "forwardPE": info.get("forwardPE"),
-                    "trailingPegRatio": info.get("trailingPegRatio"),
-                    "enterpriseToRevenue": info.get("enterpriseToRevenue"),
-                    "enterpriseToEbitda": info.get("enterpriseToEbitda"),
-                    "freeCashflow": info.get("freeCashflow"),
-                    "returnOnAssets": info.get("returnOnAssets"),
-                    "returnOnEquity": info.get("returnOnEquity"),
-                }
-                all_results.append(stock_data)
+        price = info.get("currentPrice", info.get("regularMarketPrice", 0))
+        if price < 10:
+            continue
 
-                db.collection("stocks").document(stock_data["symbol"]).set(stock_data)
-                added_count += 1
-            except urllib.error.HTTPError as e:
-                print(f"HTTP error for {symbol}: {e}")
-            except Exception as e:
-                print(f"Error for {symbol}: {e}")
+        stock_data = {
+            "symbol": info.get("symbol"),
+            "name": info.get("shortName"),
+            "marketCap": info.get("marketCap"),
+            "grossMargins": info.get("grossMargins"),
+            "ebitdaMargins": info.get("ebitdaMargins"),
+            "operatingMargins": info.get("operatingMargins"),
+            "earningsGrowth": info.get("earningsGrowth"),
+            "revenueGrowth": info.get("revenueGrowth"),
+            "forwardPE": info.get("forwardPE"),
+            "trailingPegRatio": info.get("trailingPegRatio"),
+            "enterpriseToRevenue": info.get("enterpriseToRevenue"),
+            "enterpriseToEbitda": info.get("enterpriseToEbitda"),
+            "freeCashflow": info.get("freeCashflow"),
+            "returnOnAssets": info.get("returnOnAssets"),
+            "returnOnEquity": info.get("returnOnEquity"),
+        }
 
-        print(f"Batch {batch_num} complete: {added_count} added")
-        time.sleep(random.uniform(4, 6))
+        try:
+            db.collection("stocks").document(stock_data["symbol"]).set(stock_data)
+            all_results.append(stock_data)
+            print(f"  Added {symbol}")
+        except Exception as e:
+            print(f"  Firestore write failed for {symbol}: {e}")
 
+        # Every 50 tickers take a longer cooldown to let Yahoo's rate limit window reset
+        if (i + 1) % 50 == 0:
+            cooldown = random.uniform(30, 45)
+            print(f"--- {i+1}/{total} done, cooling down {cooldown:.0f}s ---")
+            time.sleep(cooldown)
+        else:
+            # Normal pace: 1.5-3.5s between requests
+            time.sleep(random.uniform(1, 3))
+
+    print(f"Done. {len(all_results)} stocks added to Firestore.")
     return all_results
 
+
 def main():
-    response = requests.get(FMP_URL)
-    stocks = response.json()
+    all_tickers = get_tickers_from_nasdaq()
+    print(f"Total tickers from NASDAQ/NYSE listings: {len(all_tickers)}")
+
+    if not all_tickers:
+        print("No tickers fetched -- check network or NASDAQ trader URLs.")
+        return
 
     existing_docs = db.collection("stocks").stream()
     existing_symbols = set(doc.id for doc in existing_docs)
 
-    filtered_tickers = [
-        s['symbol'] for s in stocks
-        if (
-            s.get("exchange") in ["NASDAQ Global Select", "NASDAQ Global Market"] or
-            s.get("exchangeShortName") == "NYSE"
-        ) and s.get("price", 0) > 10.0
-        and s.get("type") == "stock"
-        and s['symbol'] not in existing_symbols
-        and len(s['symbol']) <= 4
-    ]
-
-    print(f"Tickers passing exchange filter: {len(filtered_tickers)}")
+    filtered_tickers = [t for t in all_tickers if t not in existing_symbols]
+    print(f"Tickers not yet in DB: {len(filtered_tickers)}")
 
     fetch_in_batches(filtered_tickers)
+
 
 if __name__ == "__main__":
     main()
