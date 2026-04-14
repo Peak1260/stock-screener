@@ -5,12 +5,11 @@ This is a full-stack stock screener that helps users identify potential “home 
 ##  Tech Stack
 
 - **Frontend**: React + Tailwind CSS
-- **Backend**: FastAPI (Python)
 - **Database**: Firebase Firestore
 - **Auth**: Firebase Authentication (Google Sign-In)
 - **Deployment**:
   - Frontend: Vercel
-  - Backend: GitHub Actions (runs `update_db.py` daily)
+  - Backend: GitHub Actions (runs `update_db.py` every Monday)
 - **Stock Data**: Financial Modeling Prep (FMP) API, yfinance API
 
 ---
