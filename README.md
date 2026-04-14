@@ -10,7 +10,7 @@ This is a full-stack stock screener that helps users identify potential “home 
 - **Deployment**:
   - Frontend: Vercel
   - Backend: GitHub Actions (runs `update_db.py` every Monday)
-- **Stock Data**: Financial Modeling Prep (FMP) API, yfinance API
+- **Stock Data**: Financial Modeling Prep (FMP) API, yfinance API, Finnhub API
 
 ---
 
