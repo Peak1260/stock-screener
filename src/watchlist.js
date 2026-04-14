@@ -4,17 +4,41 @@ import { collection, doc, setDoc, getDocs, deleteDoc } from 'firebase/firestore'
 
 const FINNHUB_KEY = process.env.REACT_APP_FINNHUB_KEY;
 const FH = 'https://finnhub.io/api/v1';
-
-// Watchlist stored in Firestore collection "watchlist", one doc per ticker
 const WATCHLIST_COL = 'watchlist';
 
 // ---------------------------------------------------------------------------
-// Technical indicator calculations (computed from raw candle data)
+// Technical indicator calculations
 // ---------------------------------------------------------------------------
 function calcSMA(closes, period) {
   if (!closes || closes.length < period) return null;
-  const slice = closes.slice(-period);
-  return slice.reduce((a, b) => a + b, 0) / period;
+  return closes.slice(-period).reduce((a, b) => a + b, 0) / period;
+}
+
+// Returns the previous SMA using the second-to-last window
+function calcPrevSMA(closes, period) {
+  if (!closes || closes.length < period + 1) return null;
+  return closes.slice(-(period + 1), -1).reduce((a, b) => a + b, 0) / period;
+}
+
+// Detects golden cross (SMA20 crosses above SMA50) or death cross (crosses below)
+// by comparing current and previous bar positions
+function detectSMACross(closes) {
+  const sma20Now  = calcSMA(closes, 20);
+  const sma50Now  = calcSMA(closes, 50);
+  const sma20Prev = calcPrevSMA(closes, 20);
+  const sma50Prev = calcPrevSMA(closes, 50);
+
+  if (sma20Now == null || sma50Now == null || sma20Prev == null || sma50Prev == null) {
+    return null;
+  }
+
+  return {
+    sma20: sma20Now,
+    sma50: sma50Now,
+    crossedAbove: sma20Prev <= sma50Prev && sma20Now > sma50Now, // golden cross
+    crossedBelow: sma20Prev >= sma50Prev && sma20Now < sma50Now, // death cross
+    sma20AboveSma50: sma20Now > sma50Now,
+  };
 }
 
 function calcRSI(closes, period = 14) {
@@ -29,29 +53,51 @@ function calcRSI(closes, period = 14) {
   const avgGain = gains / period;
   const avgLoss = losses / period;
   if (avgLoss === 0) return 100;
-  const rs = avgGain / avgLoss;
-  return 100 - 100 / (1 + rs);
+  return 100 - 100 / (1 + avgGain / avgLoss);
 }
 
-function calcEMA(closes, period) {
-  if (!closes || closes.length < period) return null;
-  const k = 2 / (period + 1);
-  let ema = closes.slice(0, period).reduce((a, b) => a + b, 0) / period;
-  for (let i = period; i < closes.length; i++) {
-    ema = closes[i] * k + ema * (1 - k);
-  }
-  return ema;
-}
-
+// Proper MACD with full signal line EMA and crossover detection
 function calcMACD(closes) {
-  if (!closes || closes.length === 0) return null;
-  const ema12 = calcEMA(closes, 12);
-  const ema26 = calcEMA(closes, 26);
-  if (ema12 === null || ema26 === null) return null;
-  const macdLine = ema12 - ema26;
-  // Signal: 9-period EMA of MACD — approximate with last 9 MACD values
-  // For simplicity we return the single current MACD and its value
-  return { macd: macdLine, signal: macdLine * 0.9 }; // signal approximation
+  if (!closes || closes.length < 35) return null;
+
+  const k12 = 2 / 13;
+  const k26 = 2 / 27;
+
+  let ema12 = closes.slice(0, 12).reduce((a, b) => a + b, 0) / 12;
+  let ema26 = closes.slice(0, 26).reduce((a, b) => a + b, 0) / 26;
+
+  for (let i = 12; i < 26; i++) ema12 = closes[i] * k12 + ema12 * (1 - k12);
+
+  const macdLine = [];
+  for (let i = 26; i < closes.length; i++) {
+    ema12 = closes[i] * k12 + ema12 * (1 - k12);
+    ema26 = closes[i] * k26 + ema26 * (1 - k26);
+    macdLine.push(ema12 - ema26);
+  }
+
+  if (macdLine.length < 9) return null;
+
+  const k9 = 2 / 10;
+
+  // Build full signal line to get previous signal for crossover
+  let signal = macdLine.slice(0, 9).reduce((a, b) => a + b, 0) / 9;
+  let prevSignal = signal;
+  for (let i = 9; i < macdLine.length; i++) {
+    prevSignal = signal;
+    signal = macdLine[i] * k9 + signal * (1 - k9);
+  }
+
+  const macd     = macdLine[macdLine.length - 1];
+  const prevMacd = macdLine[macdLine.length - 2];
+
+  return {
+    macd,
+    signal,
+    histogram: macd - signal,
+    crossedAbove: prevMacd <= prevSignal && macd > signal, // bullish crossover
+    crossedBelow: prevMacd >= prevSignal && macd < signal, // bearish crossover
+    macdAboveSignal: macd > signal,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -59,9 +105,6 @@ function calcMACD(closes) {
 // ---------------------------------------------------------------------------
 const fmt = (v, decimals = 2) =>
   v === null || v === undefined || isNaN(v) ? '—' : Number(v).toFixed(decimals);
-
-const fmtPct = (v) =>
-  v === null || v === undefined || isNaN(v) ? '—' : `${(Number(v) * 100).toFixed(2)}%`;
 
 const fmtLarge = (v) => {
   if (!v || isNaN(v)) return '—';
@@ -100,17 +143,25 @@ function SentimentBar({ value, min = -5, max = 5 }) {
   );
 }
 
-function MetricBox({ label, value, colorCls }) {
+function MetricBox({ label, value, colorCls, sub, badge }) {
   return (
     <div className="border rounded p-3 bg-gray-50">
-      <p className="text-xs text-gray-400 uppercase tracking-wide">{label}</p>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <p className="text-xs text-gray-400 uppercase tracking-wide">{label}</p>
+        {badge && (
+          <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${badge.cls}`}>
+            {badge.text}
+          </span>
+        )}
+      </div>
       <p className={`text-sm mt-1 font-semibold ${colorCls ?? 'text-gray-800'}`}>{value}</p>
+      {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Stock detail panel — fetches from Finnhub, computes technicals client-side
+// Stock detail panel
 // ---------------------------------------------------------------------------
 function StockDetail({ ticker, onClose }) {
   const [data, setData]       = useState(null);
@@ -125,37 +176,43 @@ function StockDetail({ ticker, onClose }) {
 
     async function load() {
       try {
-        if (!FINNHUB_KEY) throw new Error('REACT_APP_FINNHUB_KEY is not set in your .env');
-
-        // Unix timestamps: 1 year of daily candles for indicator calculation
         const toTs   = Math.floor(Date.now() / 1000);
-        const fromTs = toTs - 365 * 24 * 60 * 60;
+        const fromTs = toTs - 36 * 24 * 60 * 60;
 
-        const [quoteRes, profileRes, metricsRes, candleRes] = await Promise.all([
+        const [quoteRes, profileRes, metricsRes] = await Promise.all([
           fetch(`${FH}/quote?symbol=${ticker}&token=${FINNHUB_KEY}`),
           fetch(`${FH}/stock/profile2?symbol=${ticker}&token=${FINNHUB_KEY}`),
           fetch(`${FH}/stock/metric?symbol=${ticker}&metric=all&token=${FINNHUB_KEY}`),
-          fetch(`${FH}/stock/candle?symbol=${ticker}&resolution=D&from=${fromTs}&to=${toTs}&token=${FINNHUB_KEY}`),
         ]);
 
-        const [quote, profile, metricsData, candle] = await Promise.all([
+        const [quote, profile, metricsData] = await Promise.all([
           quoteRes.json(),
           profileRes.json(),
           metricsRes.json(),
-          candleRes.json(),
         ]);
 
-        // FIX: Safely extract closing prices from the Finnhub candle response array "c"
-        const closes = candle?.s === 'ok' ? candle.c : [];
+        let closes = [];
+        try {
+          const candleRes = await fetch(
+            `${FH}/stock/candle?symbol=${ticker}&resolution=D&from=${fromTs}&to=${toTs}&token=${FINNHUB_KEY}`
+          );
+          const candle = await candleRes.json();
+          console.log("FINNHUB CANDLE RESPONSE:", candle);
+          if (candle?.s === 'ok' && Array.isArray(candle.c) && candle.c.length > 0) {
+            closes = candle.c;
+          } else {
+            console.warn(`Candle data unavailable for ${ticker}:`, candle?.s);
+          }
+        } catch (candleErr) {
+          console.warn(`Candle fetch failed for ${ticker}:`, candleErr.message);
+        }
 
-        // Compute technicals from daily close prices
-        const sma20  = calcSMA(closes, 20);
-        const rsi14  = calcRSI(closes, 14);
-        const macd   = calcMACD(closes);
+        const sma   = detectSMACross(closes);
+        const rsi14 = calcRSI(closes, 14);
+        const macd  = calcMACD(closes);
+        const m     = metricsData?.metric ?? {};
 
-        const m = metricsData?.metric ?? {};
-
-        setData({ quote, profile, m, closes, sma20, rsi14, macd });
+        setData({ quote, profile, m, closes, sma, rsi14, macd });
       } catch (e) {
         setError(e.message || 'Failed to load data.');
       } finally {
@@ -187,11 +244,26 @@ function StockDetail({ ticker, onClose }) {
 
   if (!data) return null;
 
-  const { quote, profile, m, sma20, rsi14, macd } = data;
+  const { quote, profile, m, closes, sma, rsi14, macd } = data;
   const price     = quote?.c ?? 0;
   const change    = quote?.d ?? 0;
   const changePct = quote?.dp ?? 0;
   const changePos = change >= 0;
+  const noCandles = closes.length === 0;
+
+  const rsiLabel = rsi14 == null ? null : rsi14 > 70 ? 'Overbought' : rsi14 < 30 ? 'Oversold' : 'Neutral';
+
+  const smaCrossBadge = sma?.crossedAbove
+    ? { text: '⬆ Golden Cross', cls: 'bg-green-100 text-green-700' }
+    : sma?.crossedBelow
+    ? { text: '⬇ Death Cross', cls: 'bg-red-100 text-red-600' }
+    : null;
+
+  const macdCrossBadge = macd?.crossedAbove
+    ? { text: '⬆ Bullish Cross', cls: 'bg-green-100 text-green-700' }
+    : macd?.crossedBelow
+    ? { text: '⬇ Bearish Cross', cls: 'bg-red-100 text-red-600' }
+    : null;
 
   return (
     <div className="mt-6 border rounded-lg bg-white shadow-sm overflow-hidden">
@@ -222,43 +294,98 @@ function StockDetail({ ticker, onClose }) {
 
       {/* Technicals */}
       <div className="p-4 border-b">
-        <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Technicals</h4>
+        <div className="flex items-center gap-2 mb-3">
+          <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Technicals</h4>
+          {noCandles && (
+            <span className="text-xs text-yellow-600 bg-yellow-50 border border-yellow-200 px-2 py-0.5 rounded">
+              Candle data unavailable
+            </span>
+          )}
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <MetricBox
             label="SMA (20)"
-            value={`$${fmt(sma20)}`}
-            colorCls={sma20 && price ? (price > sma20 ? 'text-green-600 font-semibold' : 'text-red-500 font-semibold') : 'text-gray-800 font-semibold'}
+            value={sma?.sma20 != null ? `$${fmt(sma.sma20)}` : '—'}
+            colorCls={sma?.sma20 && price ? (price > sma.sma20 ? 'text-green-600 font-semibold' : 'text-red-500 font-semibold') : 'text-gray-500 font-semibold'}
+            sub={sma?.sma20 && price ? (price > sma.sma20 ? 'Price above SMA20' : 'Price below SMA20') : null}
+          />
+          <MetricBox
+            label="SMA (50)"
+            value={sma?.sma50 != null ? `$${fmt(sma.sma50)}` : '—'}
+            colorCls={sma?.sma50 && price ? (price > sma.sma50 ? 'text-green-600 font-semibold' : 'text-red-500 font-semibold') : 'text-gray-500 font-semibold'}
+            sub={sma != null ? (sma.sma20AboveSma50 ? 'SMA20 above SMA50' : 'SMA20 below SMA50') : null}
+            badge={smaCrossBadge}
           />
           <MetricBox
             label="RSI (14)"
-            value={fmt(rsi14)}
-            colorCls={rsi14 ? (rsi14 > 70 ? 'text-red-500 font-semibold' : rsi14 < 30 ? 'text-green-600 font-semibold' : 'text-gray-800 font-semibold') : 'text-gray-800 font-semibold'}
+            value={rsi14 != null ? fmt(rsi14) : '—'}
+            colorCls={
+              rsi14 != null
+                ? rsi14 > 70 ? 'text-red-500 font-semibold'
+                : rsi14 < 30 ? 'text-green-600 font-semibold'
+                : 'text-gray-800 font-semibold'
+                : 'text-gray-500 font-semibold'
+            }
+            sub={rsiLabel}
           />
           <MetricBox
             label="MACD"
-            value={fmt(macd?.macd)}
-            colorCls={macd?.macd != null ? (macd.macd > 0 ? 'text-green-600 font-semibold' : 'text-red-500 font-semibold') : 'text-gray-800 font-semibold'}
-          />
-          <MetricBox
-            label="MACD Signal"
-            value={fmt(macd?.signal)}
-            colorCls="text-gray-800 font-semibold"
+            value={macd != null ? `${fmt(macd.macd)} / ${fmt(macd.signal)}` : '—'}
+            colorCls={macd != null ? (macd.macdAboveSignal ? 'text-green-600 font-semibold' : 'text-red-500 font-semibold') : 'text-gray-500 font-semibold'}
+            sub={macd != null ? `Histogram: ${fmt(macd.histogram)}` : null}
+            badge={macdCrossBadge}
           />
         </div>
       </div>
 
-      {/* Fundamentals — sourced from Finnhub /stock/metric */}
+      {/* Fundamentals */}
       <div className="p-4">
         <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Fundamentals</h4>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <MetricBox label="P/E (TTM)"        value={fmt(m['peNormalizedAnnual'])}           colorCls={colorClass(m['peNormalizedAnnual'], false, 25)} />
-          <MetricBox label="P/E (Fwd)"        value={fmt(m['peExclExtraItemsTTM'])}          colorCls={colorClass(m['peExclExtraItemsTTM'], false, 25)} />
-          <MetricBox label="EV/EBITDA"        value={fmt(m['currentEv/freeCashFlowTTM'])}    colorCls={colorClass(m['currentEv/freeCashFlowTTM'], false, 30)} />
-          <MetricBox label="Debt / Equity"    value={fmt(m['totalDebt/totalEquityAnnual'])}  colorCls={colorClass(m['totalDebt/totalEquityAnnual'], false, 1)} />
-          <MetricBox label="Revenue Growth"   value={fmtPct(m['revenueGrowthTTMYoy'] != null ? m['revenueGrowthTTMYoy'] / 100 : null)} colorCls={colorClass(m['revenueGrowthTTMYoy'], true, 5)} />
-          <MetricBox label="Operating Margin" value={fmtPct(m['operatingMarginAnnual'] != null ? m['operatingMarginAnnual'] / 100 : null)} colorCls={colorClass(m['operatingMarginAnnual'], true, 10)} />
-          <MetricBox label="ROE"              value={fmtPct(m['roeRfy'] != null ? m['roeRfy'] / 100 : null)} colorCls={colorClass(m['roeRfy'], true, 15)} />
-          <MetricBox label="Market Cap"       value={fmtLarge(profile?.marketCapitalization ? profile.marketCapitalization * 1e6 : null)} colorCls="text-gray-800 font-semibold" />
+          <MetricBox
+            label="P/E (TTM)"
+            value={fmt(m['peNormalizedAnnual'])}
+            colorCls={colorClass(m['peNormalizedAnnual'], false, 30)}
+          />
+          <MetricBox
+            label="P/FCF (TTM)"
+            value={m['pfcfShareTTM'] != null ? fmt(m['pfcfShareTTM']) : '—'}
+            colorCls={colorClass(m['pfcfShareTTM'], false, 30)}
+          />
+          <MetricBox
+            label="Debt / Equity"
+            value={fmt(m['totalDebt/totalEquityAnnual'])}
+            colorCls={colorClass(m['totalDebt/totalEquityAnnual'], false, 1)}
+          />
+          <MetricBox
+            label="Revenue Growth"
+            value={m['revenueGrowthTTMYoy'] != null ? `${fmt(m['revenueGrowthTTMYoy'])}%` : '—'}
+            colorCls={colorClass(m['revenueGrowthTTMYoy'], true, 10)}
+          />
+          <MetricBox
+            label="Operating Margin"
+            value={m['operatingMarginAnnual'] != null ? `${fmt(m['operatingMarginAnnual'])}%` : '—'}
+            colorCls={colorClass(m['operatingMarginAnnual'], true, 15)}
+          />
+          <MetricBox
+            label="ROE"
+            value={m['roeRfy'] != null ? `${fmt(m['roeRfy'])}%` : '—'}
+            colorCls={colorClass(m['roeRfy'], true, 20)}
+          />
+          <MetricBox
+            label="Market Cap"
+            value={fmtLarge(profile?.marketCapitalization ? profile.marketCapitalization * 1e6 : null)}
+            colorCls="text-gray-800 font-semibold"
+          />
+          <MetricBox
+            label="52W High / Low"
+            value={
+              m['52WeekHigh'] != null && m['52WeekLow'] != null
+                ? `$${fmt(m['52WeekHigh'])} / $${fmt(m['52WeekLow'])}`
+                : '—'
+            }
+            colorCls="text-gray-800 font-semibold"
+          />
         </div>
       </div>
     </div>
@@ -268,14 +395,14 @@ function StockDetail({ ticker, onClose }) {
 // ---------------------------------------------------------------------------
 // Main Watchlist component
 // ---------------------------------------------------------------------------
-export default function Analysis() {
-  const [watchlist, setWatchlist]           = useState([]);
-  const [input, setInput]                   = useState('');
-  const [selectedTicker, setSelectedTicker] = useState(null);
+export default function Watchlist({ user }) {
+  const [watchlist, setWatchlist]               = useState([]);
+  const [input, setInput]                       = useState('');
+  const [selectedTicker, setSelectedTicker]     = useState(null);
   const [loadingWatchlist, setLoadingWatchlist] = useState(true);
 
-  // Load watchlist from Firestore on mount
   useEffect(() => {
+    if (!user) return;
     async function load() {
       try {
         const snap = await getDocs(collection(db, WATCHLIST_COL));
@@ -288,7 +415,7 @@ export default function Analysis() {
       }
     }
     load();
-  }, []);
+  }, [user]);
 
   const addTicker = async () => {
     const t = input.trim().toUpperCase().replace(/[^A-Z]/g, '');
@@ -297,7 +424,6 @@ export default function Analysis() {
     setWatchlist(next);
     setInput('');
     try {
-      // Each ticker is its own document in the "watchlist" collection
       await setDoc(doc(db, WATCHLIST_COL, t), { symbol: t, addedAt: new Date().toISOString() });
     } catch (e) {
       console.error('Failed to save ticker:', e);
@@ -319,7 +445,6 @@ export default function Analysis() {
     <div>
       <h2 className="text-2xl font-bold mb-4">Watchlist</h2>
 
-      {/* Add ticker */}
       <div className="flex gap-2 mb-6">
         <input
           type="text"
@@ -328,17 +453,16 @@ export default function Analysis() {
           onKeyDown={e => e.key === 'Enter' && addTicker()}
           placeholder="Add ticker (e.g. AAPL)"
           maxLength={5}
-          className="border px-3 py-1.5 rounded w-48 text-sm font-mono"
+          className="border px-2.5 py-1.5 rounded w-48 text-sm font-mono"
         />
         <button
           onClick={addTicker}
-          className="px-4 py-1.5 rounded bg-blue-500 hover:bg-blue-600 text-white text-sm transition"
+          className="px-7 py-1.5 rounded bg-blue-500 hover:bg-blue-600 text-white text-sm transition"
         >
           Add
         </button>
       </div>
 
-      {/* Table */}
       {loadingWatchlist ? (
         <p className="text-gray-400 text-sm">Loading watchlist...</p>
       ) : watchlist.length === 0 ? (
@@ -375,7 +499,6 @@ export default function Analysis() {
         </div>
       )}
 
-      {/* Detail panel */}
       {selectedTicker && (
         <StockDetail ticker={selectedTicker} onClose={() => setSelectedTicker(null)} />
       )}

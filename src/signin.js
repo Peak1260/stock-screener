@@ -14,7 +14,6 @@ export default function SignIn() {
       try {
         const result = await getRedirectResult(auth);
         if (result && result.user) {
-          // If they successfully logged in via Google, send them to the home page
           navigate("/");
         }
       } catch (err) {
@@ -39,6 +38,7 @@ export default function SignIn() {
   const signInWithGoogle = async () => {
     try {
       await signInWithRedirect(auth, googleProvider);
+      navigate("/");
     } catch (err) {
       alert(err.message);
     }

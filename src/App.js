@@ -8,23 +8,19 @@ import SignIn from './signin';
 import Watchlist from './watchlist';
 
 function StockScreener({ user }) {
+  //console.log("StockScreener rendered, user:", user);
   const [stocks, setStocks] = useState([]);
 
   const thresholds = {
-    forwardPE: [10, 40],
+    forwardPE: 30,
     trailingPegRatio: 2,
     enterpriseToRevenue: 15,
     enterpriseToEbitda: 30,
     revenueGrowth: 0.1,
   };
 
-  const getStatusClass = (value, threshold, rule = 'range') => {
+  const getStatusClass = (value, threshold, rule) => {
     if (value === null || value === undefined) return 'text-gray-400';
-
-    if (rule === 'range') {
-      const [min, max] = threshold;
-      return value >= min && value <= max ? 'text-green-500' : 'text-red-500';
-    }
 
     if (rule === 'greater') {
       return value > threshold ? 'text-green-500' : 'text-red-500';
@@ -39,11 +35,24 @@ function StockScreener({ user }) {
 
   const formatNumber = (value) => Number(value).toFixed(2);
 
+  const formatMarketCap = (value) => {
+    if (value >= 1_000_000_000_000) return `${(value / 1_000_000_000_000).toFixed(2)}T`;
+    if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`;
+  };
+
   useEffect(() => {
     async function fetchStocks() {
       try {
         const querySnapshot = await getDocs(collection(db, "stocks"));
-        const stocksData = querySnapshot.docs.map(doc => doc.data());
+        const stocksData = querySnapshot.docs.map(doc => {
+          const data = doc.data();
+          if (!data) {
+            console.warn("Empty document found, id:", doc.id);
+            return null;
+          }
+          return data;
+        }).filter(Boolean);
+
         setStocks(stocksData);
       } catch (err) {
         console.error("Error fetching stocks from Firestore:", err);
@@ -55,11 +64,11 @@ function StockScreener({ user }) {
 
   const countCriteriaPassed = (stock) => {
     let count = 0;
-    if (stock.forwardPE >= thresholds.forwardPE[0] && stock.forwardPE <= thresholds.forwardPE[1]) count++;
-    if (stock.trailingPegRatio < thresholds.trailingPegRatio) count++;
-    if (stock.enterpriseToRevenue < thresholds.enterpriseToRevenue) count++;
-    if (stock.enterpriseToEbitda < thresholds.enterpriseToEbitda) count++;
-    if (stock.revenueGrowth > thresholds.revenueGrowth) count++;
+    if (stock.forwardPE <= thresholds.forwardPE) count++;
+    if (stock.trailingPegRatio <= thresholds.trailingPegRatio) count++;
+    if (stock.enterpriseToRevenue <= thresholds.enterpriseToRevenue) count++;
+    if (stock.enterpriseToEbitda <= thresholds.enterpriseToEbitda) count++;
+    if (stock.revenueGrowth >= thresholds.revenueGrowth) count++;
     return count;
   };
 
@@ -80,8 +89,6 @@ function StockScreener({ user }) {
     .filter(stock => !hasMissingValue(stock))
     .map(stock => ({ ...stock, criteriaPassed: countCriteriaPassed(stock) }))
     .sort((a, b) => b.criteriaPassed - a.criteriaPassed);
-
-  console.log("2. Data after filtering:", filteredStocks);
 
   return (
     <>
@@ -126,8 +133,8 @@ function StockScreener({ user }) {
                     </a>
                   </td>
                   <td className="px-4 py-2">{stock.criteriaPassed}/5</td>
-                  <td className="px-4 py-2">{(stock.marketCap / 1e9).toFixed(2)}B</td>
-                  <td className={`px-4 py-2 ${getStatusClass(stock.forwardPE, thresholds.forwardPE, 'range')}`}>
+                  <td className="px-4 py-2">{formatMarketCap(stock.marketCap)}</td>
+                  <td className={`px-4 py-2 ${getStatusClass(stock.forwardPE, thresholds.forwardPE, 'less')}`}>
                     {formatNumber(stock.forwardPE)}
                   </td>
                   <td className={`px-4 py-2 ${getStatusClass(stock.trailingPegRatio, thresholds.trailingPegRatio, 'less')}`}>
@@ -160,7 +167,7 @@ function App({ user }) {
         <Routes>
           <Route path="/" element={<StockScreener user={user} />} />
           <Route path="/criteria" element={<Criteria />} />
-          <Route path="/watchlist" element={<Watchlist />} />
+          <Route path="/watchlist" element={<Watchlist user={user} />} />
           <Route path="/signin" element={<SignIn />} />
         </Routes>
       </div>
