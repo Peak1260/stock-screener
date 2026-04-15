@@ -5,6 +5,7 @@ import { db } from './firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import Criteria from './criteria';
 import SignIn from './signin';
+import SignUp from "./signup";
 import Watchlist from './watchlist';
 
 function StockScreener({ user }) {
@@ -169,6 +170,7 @@ function App({ user }) {
           <Route path="/criteria" element={<Criteria />} />
           <Route path="/watchlist" element={<Watchlist user={user} />} />
           <Route path="/signin" element={<SignIn />} />
+          <Route path="/signup" element={<SignUp />} />
         </Routes>
       </div>
     </div>

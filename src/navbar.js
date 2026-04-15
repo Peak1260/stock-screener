@@ -1,18 +1,43 @@
+import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import React from "react";
+import { signOut } from "firebase/auth";
+import { auth } from "./firebase";
+import { useNavigate } from "react-router-dom";
 import dingerLogo from "./dinger.png";
-import { useAnalysis } from "./AnalysisContext"; // Import the context hook
+import { useAnalysis } from "./AnalysisContext";
 
 export default function NavBar({ user }) {
-  // Get state and functions from the global context instead of props
   const { searchQuery, setSearchQuery, handleSearchSubmit } = useAnalysis();
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  const navigate = useNavigate();
 
   const onFormSubmit = (e) => {
-    e.preventDefault(); // Prevent page reload
+    e.preventDefault();
     if (searchQuery.trim()) {
       handleSearchSubmit(searchQuery.trim().toUpperCase());
     }
   };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      navigate("/signin");
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   return (
     <nav className="flex justify-between items-center px-4 py-4 bg-logo-background text-white shadow-md flex-wrap gap-4">
@@ -23,7 +48,6 @@ export default function NavBar({ user }) {
         </Link>
       </div>
 
-      {/* --- Search Bar Form --- */}
       <div className="flex-grow max-w-xl mx-auto">
         <form onSubmit={onFormSubmit}>
           <input
@@ -45,9 +69,26 @@ export default function NavBar({ user }) {
         </Link>
 
         {user ? (
-          <span className="truncate max-w-xs" title={user.email}>
-            {user.email}
-          </span>
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setDropdownOpen((prev) => !prev)}
+              className="truncate max-w-xs hover:text-blue-300 transition-colors duration-200"
+              title={user.email}
+            >
+              {user.email}
+            </button>
+
+            {dropdownOpen && (
+              <div className="absolute right-0 mt-2 w-36 bg-white rounded shadow-lg z-50">
+                <button
+                  onClick={handleSignOut}
+                  className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded"
+                >
+                  Sign Out
+                </button>
+              </div>
+            )}
+          </div>
         ) : (
           <Link
             to="/signin"

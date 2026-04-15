@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { signInWithEmailAndPassword, signInWithRedirect, getRedirectResult } from "firebase/auth";
+import { signInWithEmailAndPassword, signInWithPopup } from "firebase/auth";
 import { auth, googleProvider } from "./firebase";
 import { Link } from "react-router-dom";
 
@@ -8,22 +8,6 @@ export default function SignIn() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const handleRedirect = async () => {
-      try {
-        const result = await getRedirectResult(auth);
-        if (result && result.user) {
-          navigate("/");
-        }
-      } catch (err) {
-        console.error("Google redirect login error:", err);
-        alert(err.message);
-      }
-    };
-    
-    handleRedirect();
-  }, [navigate]);
 
   const signIn = async (e) => {
     e.preventDefault();
@@ -37,7 +21,7 @@ export default function SignIn() {
 
   const signInWithGoogle = async () => {
     try {
-      await signInWithRedirect(auth, googleProvider);
+      await signInWithPopup(auth, googleProvider);
       navigate("/");
     } catch (err) {
       alert(err.message);
@@ -77,10 +61,10 @@ export default function SignIn() {
           Sign in with Google
         </button>
         <p className="mt-4 text-center">
-            Don't have an account?{" "}
-            <Link to="/signup" className="text-blue-500 hover:underline">
-                Sign Up
-            </Link>
+          Don't have an account?{" "}
+          <Link to="/signup" className="text-blue-500 hover:underline">
+            Sign Up
+          </Link>
         </p>
       </div>
     </div>
