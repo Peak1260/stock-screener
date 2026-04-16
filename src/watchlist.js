@@ -6,7 +6,6 @@ const FINNHUB_KEY      = process.env.REACT_APP_FINNHUB_KEY;
 const TWELVE_DATA_KEY  = process.env.REACT_APP_TWELVE_DATA_KEY;
 const FH               = 'https://finnhub.io/api/v1';
 const TD               = 'https://api.twelvedata.com';
-const WATCHLIST_COL    = 'watchlist';
 
 // ---------------------------------------------------------------------------
 // Technical indicator calculations
@@ -507,10 +506,17 @@ export default function Watchlist({ user }) {
   const [loadingWatchlist, setLoadingWatchlist] = useState(true);
 
   useEffect(() => {
-    if (!user) return;
+    // Ensure we have a user before trying to fetch
+    if (!user || !user.uid) {
+      setLoadingWatchlist(false);
+      return;
+    }
+    
     async function load() {
       try {
-        const snap = await getDocs(collection(db, WATCHLIST_COL));
+        // Fix 1: Fetch from the user's specific subcollection
+        const userWatchlistRef = collection(db, 'users', user.uid, 'watchlist');
+        const snap = await getDocs(userWatchlistRef);
         const tickers = snap.docs.map(d => d.id).sort();
         setWatchlist(tickers);
       } catch (e) {
@@ -523,24 +529,33 @@ export default function Watchlist({ user }) {
   }, [user]);
 
   const addTicker = async () => {
+    if (!user || !user.uid) return;
+    
     const t = input.trim().toUpperCase().replace(/[^A-Z]/g, '');
     if (!t || watchlist.includes(t)) { setInput(''); return; }
+    
     const next = [...watchlist, t].sort();
     setWatchlist(next);
     setInput('');
+    
     try {
-      await setDoc(doc(db, WATCHLIST_COL, t), { symbol: t, addedAt: new Date().toISOString() });
+      const docRef = doc(db, 'users', user.uid, 'watchlist', t);
+      await setDoc(docRef, { symbol: t, addedAt: new Date().toISOString() });
     } catch (e) {
       console.error('Failed to save ticker:', e);
     }
   };
 
   const removeTicker = async (t) => {
+    if (!user || !user.uid) return;
+
     const next = watchlist.filter(x => x !== t);
     setWatchlist(next);
     if (selectedTicker === t) setSelectedTicker(null);
+    
     try {
-      await deleteDoc(doc(db, WATCHLIST_COL, t));
+      const docRef = doc(db, 'users', user.uid, 'watchlist', t);
+      await deleteDoc(docRef);
     } catch (e) {
       console.error('Failed to remove ticker:', e);
     }
@@ -559,10 +574,12 @@ export default function Watchlist({ user }) {
           placeholder="Add ticker (e.g. AAPL)"
           maxLength={5}
           className="border px-2.5 py-1.5 rounded w-48 text-sm font-mono"
+          disabled={!user}
         />
         <button
           onClick={addTicker}
-          className="px-7 py-1.5 rounded bg-blue-500 hover:bg-blue-600 text-white text-sm transition"
+          disabled={!user}
+          className="px-7 py-1.5 rounded bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white text-sm transition"
         >
           Add
         </button>
@@ -573,39 +590,49 @@ export default function Watchlist({ user }) {
       ) : watchlist.length === 0 ? (
         <p className="text-gray-500 text-sm">No tickers yet. Add one above.</p>
       ) : (
-        <div className="overflow-auto mb-2">
-          <table className="min-w-full table-auto border">
+        <div className="overflow-auto mb-2 border rounded">
+          <table className="min-w-full table-auto">
             <thead>
-              <tr className="bg-gray-100">
+              <tr className="bg-gray-100 border-b">
                 <th className="px-4 py-2 text-left text-sm">Ticker</th>
                 <th className="px-4 py-2 text-left text-sm">Action</th>
               </tr>
             </thead>
             <tbody>
               {watchlist.map(t => (
-                <tr
-                  key={t}
-                  className={`border-t cursor-pointer transition-colors ${selectedTicker === t ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
-                  onClick={() => setSelectedTicker(prev => prev === t ? null : t)}
-                >
-                  <td className="px-4 py-2 font-bold font-mono text-sm">{t}</td>
-                  <td className="px-4 py-2">
-                    <button
-                      onClick={e => { e.stopPropagation(); removeTicker(t); }}
-                      className="text-xs text-red-400 hover:text-red-600 transition"
-                    >
-                      Remove
-                    </button>
-                  </td>
-                </tr>
+                <React.Fragment key={t}>
+                  <tr
+                    className={`cursor-pointer transition-colors ${
+                      selectedTicker === t ? 'bg-blue-50 border-b-0' : 'hover:bg-gray-50 border-b'
+                    }`}
+                    onClick={() => setSelectedTicker(prev => prev === t ? null : t)}
+                  >
+                    <td className="px-4 py-2 font-bold font-mono text-sm">{t}</td>
+                    <td className="px-4 py-2">
+                      <button
+                        onClick={e => { e.stopPropagation(); removeTicker(t); }}
+                        className="text-xs text-red-400 hover:text-red-600 transition"
+                      >
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                  
+                  {selectedTicker === t && (
+                    <tr className="border-b bg-gray-50">
+                      <td colSpan="2" className="p-0">
+                        {/* Adding a slight inset shadow and padding makes it feel like an expandable drawer */}
+                        <div className="p-4 shadow-inner">
+                          <StockDetail ticker={t} onClose={() => setSelectedTicker(null)} />
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
               ))}
             </tbody>
           </table>
         </div>
-      )}
-
-      {selectedTicker && (
-        <StockDetail ticker={selectedTicker} onClose={() => setSelectedTicker(null)} />
       )}
     </div>
   );
