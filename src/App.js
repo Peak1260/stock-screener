@@ -102,60 +102,86 @@ function StockScreener({ user }) {
           View Strategy Criteria
         </Link>
       </h1>
-      <div className="overflow-auto">
-        <table className="min-w-full table-auto border">
-          <thead>
-            <tr className="bg-gray-100 text-left">
-              <th className="px-4 py-2">Ticker</th>
-              <th className="px-4 py-2">Company</th>
-              <th className="px-4 py-2">Criteria Passed</th>
-              <th className="px-4 py-2">Market Cap (B)</th>
-              <th className="px-4 py-2">Forward P/E</th>
-              <th className="px-4 py-2">PEG Ratio</th>
-              <th className="px-4 py-2">EV/Revenue</th>
-              <th className="px-4 py-2">EV/EBITDA</th>
-              <th className="px-4 py-2">Revenue Growth</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredStocks.map(stock => {
-              const rowStyle = stock.criteriaPassed <= 3 ? "bg-gray-800 text-gray-400" : "";
-              return (
-                <tr key={stock.symbol} className={`border-b hover:bg-gray-50 ${rowStyle}`}>
-                  <td className="px-4 py-2 font-semibold">{stock.symbol}</td>
-                  <td className="px-4 py-2">
-                    <a
-                      href={`https://finance.yahoo.com/quote/${stock.symbol}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-500 hover:underline"
-                    >
-                      {stock.name}
-                    </a>
-                  </td>
-                  <td className="px-4 py-2">{stock.criteriaPassed}/5</td>
-                  <td className="px-4 py-2">{formatMarketCap(stock.marketCap)}</td>
-                  <td className={`px-4 py-2 ${getStatusClass(stock.forwardPE, thresholds.forwardPE, 'less')}`}>
-                    {formatNumber(stock.forwardPE)}
-                  </td>
-                  <td className={`px-4 py-2 ${getStatusClass(stock.trailingPegRatio, thresholds.trailingPegRatio, 'less')}`}>
-                    {formatNumber(stock.trailingPegRatio)}
-                  </td>
-                  <td className={`px-4 py-2 ${getStatusClass(stock.enterpriseToRevenue, thresholds.enterpriseToRevenue, 'less')}`}>
-                    {formatNumber(stock.enterpriseToRevenue)}
-                  </td>
-                  <td className={`px-4 py-2 ${getStatusClass(stock.enterpriseToEbitda, thresholds.enterpriseToEbitda, 'less')}`}>
-                    {formatNumber(stock.enterpriseToEbitda)}
-                  </td>
-                  <td className={`px-4 py-2 ${getStatusClass(stock.revenueGrowth, thresholds.revenueGrowth, 'greater')}`}>
-                    {stock.revenueGrowth ? `${(stock.revenueGrowth * 100).toFixed(2)}%` : '—'}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+    {/* Conditionally render the sign-in prompt or the table */}
+      {!user ? (
+        <div className="flex flex-col items-center justify-center py-16">
+          <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-200 max-w-md w-full text-center">
+            <h2 className="text-xl font-bold text-gray-800 mb-3">Authentication Required</h2>
+            <p className="text-gray-500 mb-6 text-sm">
+              Please sign in to view the stock screener and track your portfolio with fundamental/technical signals.
+            </p>
+            <div className="flex justify-center gap-3">
+              <Link 
+                to="/signin" 
+                className="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-5 rounded transition-colors"
+              >
+                Sign In
+              </Link>
+              <Link 
+                to="/signup" 
+                className="bg-gray-50 hover:bg-gray-100 text-gray-700 font-medium py-2 px-5 rounded border border-gray-300 transition-colors"
+              >
+                Create Account
+              </Link>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="overflow-auto bg-white rounded-lg shadow-sm border border-gray-200">
+          <table className="min-w-full table-auto">
+            <thead>
+              <tr className="bg-gray-50 text-left border-b border-gray-200">
+                <th className="px-4 py-3 text-sm font-semibold text-gray-600">Ticker</th>
+                <th className="px-4 py-3 text-sm font-semibold text-gray-600">Company</th>
+                <th className="px-4 py-3 text-sm font-semibold text-gray-600">Criteria Passed</th>
+                <th className="px-4 py-3 text-sm font-semibold text-gray-600">Market Cap (B)</th>
+                <th className="px-4 py-3 text-sm font-semibold text-gray-600">Forward P/E</th>
+                <th className="px-4 py-3 text-sm font-semibold text-gray-600">PEG Ratio</th>
+                <th className="px-4 py-3 text-sm font-semibold text-gray-600">EV/Revenue</th>
+                <th className="px-4 py-3 text-sm font-semibold text-gray-600">EV/EBITDA</th>
+                <th className="px-4 py-3 text-sm font-semibold text-gray-600">Revenue Growth</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredStocks.map(stock => {
+                const rowStyle = stock.criteriaPassed <= 3 ? "bg-gray-800 text-gray-600" : "";
+                return (
+                  <tr key={stock.symbol} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${rowStyle}`}>
+                    <td className="px-4 py-3 font-semibold">{stock.symbol}</td>
+                    <td className="px-4 py-3">
+                      <a
+                        href={`https://finance.yahoo.com/quote/${stock.symbol}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-500 hover:underline"
+                      >
+                        {stock.name}
+                      </a>
+                    </td>
+                    <td className="px-4 py-3">{stock.criteriaPassed}/5</td>
+                    <td className="px-4 py-3">{formatMarketCap(stock.marketCap)}</td>
+                    <td className={`px-4 py-3 ${getStatusClass(stock.forwardPE, thresholds.forwardPE, 'less')}`}>
+                      {formatNumber(stock.forwardPE)}
+                    </td>
+                    <td className={`px-4 py-3 ${getStatusClass(stock.trailingPegRatio, thresholds.trailingPegRatio, 'less')}`}>
+                      {formatNumber(stock.trailingPegRatio)}
+                    </td>
+                    <td className={`px-4 py-3 ${getStatusClass(stock.enterpriseToRevenue, thresholds.enterpriseToRevenue, 'less')}`}>
+                      {formatNumber(stock.enterpriseToRevenue)}
+                    </td>
+                    <td className={`px-4 py-3 ${getStatusClass(stock.enterpriseToEbitda, thresholds.enterpriseToEbitda, 'less')}`}>
+                      {formatNumber(stock.enterpriseToEbitda)}
+                    </td>
+                    <td className={`px-4 py-3 ${getStatusClass(stock.revenueGrowth, thresholds.revenueGrowth, 'greater')}`}>
+                      {stock.revenueGrowth ? `${(stock.revenueGrowth * 100).toFixed(2)}%` : '—'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </>
   );
 }
