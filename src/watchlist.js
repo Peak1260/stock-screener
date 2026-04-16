@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { db } from './firebase';
 import { collection, doc, setDoc, getDocs, deleteDoc } from 'firebase/firestore';
 
-const FINNHUB_KEY = process.env.REACT_APP_FINNHUB_KEY;
-const FH = 'https://finnhub.io/api/v1';
-const WATCHLIST_COL = 'watchlist';
+const FINNHUB_KEY      = process.env.REACT_APP_FINNHUB_KEY;
+const TWELVE_DATA_KEY  = process.env.REACT_APP_TWELVE_DATA_KEY;
+const FH               = 'https://finnhub.io/api/v1';
+const TD               = 'https://api.twelvedata.com';
+const WATCHLIST_COL    = 'watchlist';
 
 // ---------------------------------------------------------------------------
 // Technical indicator calculations
@@ -14,14 +16,11 @@ function calcSMA(closes, period) {
   return closes.slice(-period).reduce((a, b) => a + b, 0) / period;
 }
 
-// Returns the previous SMA using the second-to-last window
 function calcPrevSMA(closes, period) {
   if (!closes || closes.length < period + 1) return null;
   return closes.slice(-(period + 1), -1).reduce((a, b) => a + b, 0) / period;
 }
 
-// Detects golden cross (SMA20 crosses above SMA50) or death cross (crosses below)
-// by comparing current and previous bar positions
 function detectSMACross(closes) {
   const sma20Now  = calcSMA(closes, 20);
   const sma50Now  = calcSMA(closes, 50);
@@ -35,8 +34,8 @@ function detectSMACross(closes) {
   return {
     sma20: sma20Now,
     sma50: sma50Now,
-    crossedAbove: sma20Prev <= sma50Prev && sma20Now > sma50Now, // golden cross
-    crossedBelow: sma20Prev >= sma50Prev && sma20Now < sma50Now, // death cross
+    crossedAbove: sma20Prev <= sma50Prev && sma20Now > sma50Now,
+    crossedBelow: sma20Prev >= sma50Prev && sma20Now < sma50Now,
     sma20AboveSma50: sma20Now > sma50Now,
   };
 }
@@ -56,7 +55,6 @@ function calcRSI(closes, period = 14) {
   return 100 - 100 / (1 + avgGain / avgLoss);
 }
 
-// Proper MACD with full signal line EMA and crossover detection
 function calcMACD(closes) {
   if (!closes || closes.length < 35) return null;
 
@@ -78,8 +76,6 @@ function calcMACD(closes) {
   if (macdLine.length < 9) return null;
 
   const k9 = 2 / 10;
-
-  // Build full signal line to get previous signal for crossover
   let signal = macdLine.slice(0, 9).reduce((a, b) => a + b, 0) / 9;
   let prevSignal = signal;
   for (let i = 9; i < macdLine.length; i++) {
@@ -94,10 +90,60 @@ function calcMACD(closes) {
     macd,
     signal,
     histogram: macd - signal,
-    crossedAbove: prevMacd <= prevSignal && macd > signal, // bullish crossover
-    crossedBelow: prevMacd >= prevSignal && macd < signal, // bearish crossover
+    crossedAbove: prevMacd <= prevSignal && macd > signal,
+    crossedBelow: prevMacd >= prevSignal && macd < signal,
     macdAboveSignal: macd > signal,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Overall signal scoring — simple majority of 4 indicators
+// Each indicator votes: 'bullish' | 'bearish' | 'neutral'
+// 3+ matching votes determines the final signal.
+// ---------------------------------------------------------------------------
+function scoreTechnicals({ price, sma, rsi14, macd }) {
+  const votes = [];
+
+  // 1. Price Location Vote (Relative to both SMAs)
+  // Requires price to be above BOTH to be bullish, or below BOTH to be bearish.
+  if (sma) {
+    if (price > sma.sma20 && price > sma.sma50) {
+      votes.push('bullish');
+    } else if (price < sma.sma20 && price < sma.sma50) {
+      votes.push('bearish');
+    } else {
+      votes.push('neutral'); // Price is between the two lines
+    }
+  }
+
+  // 2. SMA Crossover Vote (The "Big Trend")
+  if (sma) {
+    votes.push(sma.sma20AboveSma50 ? 'bullish' : 'bearish');
+  }
+
+  // 3. RSI Vote (Relative Strength)
+  if (rsi14 != null) {
+    if (rsi14 > 70)      votes.push('bearish');
+    else if (rsi14 < 30) votes.push('bullish');
+    else                 votes.push('neutral');
+  }
+
+  // 4. MACD Vote (Momentum Shift)
+  if (macd) {
+    votes.push(macd.macdAboveSignal ? 'bullish' : 'bearish');
+  }
+
+  // If data is missing for some reason, we can't get a reliable majority
+  if (votes.length < 4) return null;
+
+  const bullCount = votes.filter(v => v === 'bullish').length;
+  const bearCount = votes.filter(v => v === 'bearish').length;
+
+  // Majority Logic: 3 or more required for a signal
+  if (bullCount >= 3) return 'bullish';
+  if (bearCount >= 3) return 'bearish';
+  
+  return 'neutral'; // If it's a 2-2 tie or mostly neutral votes
 }
 
 // ---------------------------------------------------------------------------
@@ -160,6 +206,64 @@ function MetricBox({ label, value, colorCls, sub, badge }) {
   );
 }
 
+function OverallSignalBox({ signal }) {
+  if (!signal) return null;
+
+  const config = {
+    bullish: {
+      label: '▲ Bullish',
+      cls: 'bg-green-50 border-green-300',
+      valueCls: 'text-green-700',
+      sub: '3+ indicators agree: upward trend',
+    },
+    bearish: {
+      label: '▼ Bearish',
+      cls: 'bg-red-50 border-red-300',
+      valueCls: 'text-red-600',
+      sub: '3+ indicators agree: downward pressure',
+    },
+    neutral: {
+      label: '◆ Neutral',
+      cls: 'bg-yellow-50 border-yellow-300',
+      valueCls: 'text-yellow-700',
+      sub: 'Mixed signals across indicators',
+    },
+  }[signal];
+
+  return (
+    <div className={`border-2 rounded p-3 ${config.cls}`}>
+      <p className="text-xs text-gray-400 uppercase tracking-wide">Overall Signal</p>
+      <p className={`text-base mt-1 font-bold ${config.valueCls}`}>{config.label}</p>
+      <p className="text-xs text-gray-500 mt-0.5">{config.sub}</p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Twelve Data — fetch daily closes (newest-first, reversed to oldest-first)
+// ---------------------------------------------------------------------------
+async function fetchTwelveDataCloses(ticker) {
+  const url =
+    `${TD}/time_series?symbol=${ticker}&interval=1day&outputsize=60&apikey=${TWELVE_DATA_KEY}`;
+  const res  = await fetch(url);
+  const json = await res.json();
+
+  if (json.status === 'error') {
+    throw new Error(`Twelve Data: ${json.message}`);
+  }
+
+  if (!Array.isArray(json.values) || json.values.length === 0) {
+    return [];
+  }
+
+  // values are newest-first; reverse so index 0 = oldest
+  return json.values
+    .slice()
+    .reverse()
+    .map(bar => parseFloat(bar.close))
+    .filter(n => !isNaN(n));
+}
+
 // ---------------------------------------------------------------------------
 // Stock detail panel
 // ---------------------------------------------------------------------------
@@ -176,9 +280,6 @@ function StockDetail({ ticker, onClose }) {
 
     async function load() {
       try {
-        const toTs   = Math.floor(Date.now() / 1000);
-        const fromTs = toTs - 36 * 24 * 60 * 60;
-
         const [quoteRes, profileRes, metricsRes] = await Promise.all([
           fetch(`${FH}/quote?symbol=${ticker}&token=${FINNHUB_KEY}`),
           fetch(`${FH}/stock/profile2?symbol=${ticker}&token=${FINNHUB_KEY}`),
@@ -192,27 +293,22 @@ function StockDetail({ ticker, onClose }) {
         ]);
 
         let closes = [];
+        let tdError = null;
         try {
-          const candleRes = await fetch(
-            `${FH}/stock/candle?symbol=${ticker}&resolution=D&from=${fromTs}&to=${toTs}&token=${FINNHUB_KEY}`
-          );
-          const candle = await candleRes.json();
-          console.log("FINNHUB CANDLE RESPONSE:", candle);
-          if (candle?.s === 'ok' && Array.isArray(candle.c) && candle.c.length > 0) {
-            closes = candle.c;
-          } else {
-            console.warn(`Candle data unavailable for ${ticker}:`, candle?.s);
-          }
-        } catch (candleErr) {
-          console.warn(`Candle fetch failed for ${ticker}:`, candleErr.message);
+          closes = await fetchTwelveDataCloses(ticker);
+        } catch (e) {
+          tdError = e.message;
+          console.warn(`Twelve Data fetch failed for ${ticker}:`, e.message);
         }
 
-        const sma   = detectSMACross(closes);
-        const rsi14 = calcRSI(closes, 14);
-        const macd  = calcMACD(closes);
-        const m     = metricsData?.metric ?? {};
+        const sma    = detectSMACross(closes);
+        const rsi14  = calcRSI(closes, 14);
+        const macd   = calcMACD(closes);
+        const price  = quote?.c ?? 0;
+        const signal = scoreTechnicals({ price, sma, rsi14, macd });
+        const m      = metricsData?.metric ?? {};
 
-        setData({ quote, profile, m, closes, sma, rsi14, macd });
+        setData({ quote, profile, m, closes, sma, rsi14, macd, signal, tdError });
       } catch (e) {
         setError(e.message || 'Failed to load data.');
       } finally {
@@ -244,7 +340,7 @@ function StockDetail({ ticker, onClose }) {
 
   if (!data) return null;
 
-  const { quote, profile, m, closes, sma, rsi14, macd } = data;
+  const { quote, profile, m, closes, sma, rsi14, macd, signal, tdError } = data;
   const price     = quote?.c ?? 0;
   const change    = quote?.d ?? 0;
   const changePct = quote?.dp ?? 0;
@@ -298,22 +394,30 @@ function StockDetail({ ticker, onClose }) {
           <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Technicals</h4>
           {noCandles && (
             <span className="text-xs text-yellow-600 bg-yellow-50 border border-yellow-200 px-2 py-0.5 rounded">
-              Candle data unavailable
+              {tdError ? `Twelve Data: ${tdError}` : 'No price data available'}
             </span>
           )}
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           <MetricBox
             label="SMA (20)"
             value={sma?.sma20 != null ? `$${fmt(sma.sma20)}` : '—'}
-            colorCls={sma?.sma20 && price ? (price > sma.sma20 ? 'text-green-600 font-semibold' : 'text-red-500 font-semibold') : 'text-gray-500 font-semibold'}
-            sub={sma?.sma20 && price ? (price > sma.sma20 ? 'Price above SMA20' : 'Price below SMA20') : null}
+            colorCls={sma?.sma20 && price ? (price > sma.sma20 ? 'text-green-600' : 'text-red-500') : ''}
+            sub={price > sma?.sma20 ? 'Price above 20' : 'Price below 20'}
           />
+
           <MetricBox
             label="SMA (50)"
             value={sma?.sma50 != null ? `$${fmt(sma.sma50)}` : '—'}
-            colorCls={sma?.sma50 && price ? (price > sma.sma50 ? 'text-green-600 font-semibold' : 'text-red-500 font-semibold') : 'text-gray-500 font-semibold'}
-            sub={sma != null ? (sma.sma20AboveSma50 ? 'SMA20 above SMA50' : 'SMA20 below SMA50') : null}
+            colorCls={price > sma?.sma50 ? 'text-green-600' : 'text-red-500'}
+            sub={price > sma?.sma50 ? 'Price above 50' : 'Price below 50'}
+          />
+
+          <MetricBox
+            label="SMA Crossover"
+            value={sma?.sma20AboveSma50 ? "Bullish Trend" : "Bearish Trend"}
+            colorCls={sma?.sma20AboveSma50 ? 'text-green-600' : 'text-red-500'}
+            sub={sma?.sma20AboveSma50 ? "20 SMA > 50 SMA" : "20 SMA < 50 SMA"}
             badge={smaCrossBadge}
           />
           <MetricBox
@@ -335,6 +439,7 @@ function StockDetail({ ticker, onClose }) {
             sub={macd != null ? `Histogram: ${fmt(macd.histogram)}` : null}
             badge={macdCrossBadge}
           />
+          <OverallSignalBox signal={signal} />
         </div>
       </div>
 
