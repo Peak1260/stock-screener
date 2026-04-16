@@ -148,7 +148,7 @@ def fetch_in_batches(tickers):
             continue
 
         price = info.get("currentPrice", info.get("regularMarketPrice", 0))
-        if price < 10:
+        if price < 1:
             continue
 
         stock_data = {
@@ -182,7 +182,6 @@ def fetch_in_batches(tickers):
             print(f"--- {i+1}/{total} done, cooling down {cooldown:.0f}s ---")
             time.sleep(cooldown)
         else:
-            # Normal pace: 1.5-3.5s between requests
             time.sleep(random.uniform(1, 3))
 
     print(f"Done. {len(all_results)} stocks added to Firestore.")
