@@ -9,7 +9,6 @@ import SignUp from "./signup";
 import Watchlist from './watchlist';
 
 function StockScreener({ user }) {
-  //console.log("StockScreener rendered, user:", user);
   const [stocks, setStocks] = useState([]);
 
   const thresholds = {
@@ -17,7 +16,7 @@ function StockScreener({ user }) {
     trailingPegRatio: 2,
     enterpriseToRevenue: 15,
     enterpriseToEbitda: 30,
-    revenueGrowth: 0.1,
+    revenueGrowth: 0.15,
   };
 
   const getStatusClass = (value, threshold, rule) => {
@@ -146,7 +145,7 @@ function StockScreener({ user }) {
               {filteredStocks.map(stock => {
                 const rowStyle = stock.criteriaPassed <= 3 ? "bg-gray-800 text-gray-600" : "";
                 return (
-                  <tr key={stock.symbol} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${rowStyle}`}>
+                  <tr key={stock.symbol} className={`border-b border-gray-100 transition-colors ${rowStyle}`}>
                     <td className="px-4 py-3 font-semibold">{stock.symbol}</td>
                     <td className="px-4 py-3">
                       <a

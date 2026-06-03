@@ -5,7 +5,7 @@ const criteria = [
   { label: "EBITDA Margins", value: "> 15%" },
   { label: "Operating Margins", value: "> 10%" },
   { label: "Earnings Growth", value: "> 10%" },
-  { label: "Revenue Growth", value: "> 5%" },
+  { label: "Revenue Growth", value: "> 10%" },
   { label: "Return on Assets", value: "> 5%" },
   { label: "Return on Equity", value: "> 20%" },
   { label: "Free Cash Flow", value: "> $0" },
@@ -29,7 +29,7 @@ export default function StockCriteria() {
             ))}
           </ul>
           <p className="text-gray-700 mt-6">
-            In addition to the fundamental metrics listed above, we apply specific thresholds to help identify attractively priced stocks. For example, we consider a forward P/E ratio below 30, a PEG ratio below 2, enterprise value to revenue below 15, enterprise value to EBITDA below 30, and whether the revenue growth is above 10%. Stocks that meet these thresholds are highlighted in green, while those outside the desired range are marked in red. Our screener also visually de-emphasizes stocks that meet three or fewer of these criteria by greying them out, allowing you to focus on companies with stronger financials and valuations aligned with our strategy.
+            In addition to the fundamental metrics listed above, we apply specific thresholds to help identify attractively priced stocks. For example, we consider a forward P/E ratio below 30, a PEG ratio below 2, enterprise value to revenue below 15, enterprise value to EBITDA below 30, and whether the revenue growth is above 15%. Stocks that meet these thresholds are highlighted in green, while those outside the desired range are marked in red. Our screener also visually de-emphasizes stocks that meet three or fewer of these criteria by greying them out, allowing you to focus on companies with stronger financials and valuations aligned with our strategy.
           </p>
           <Link
             to="/"

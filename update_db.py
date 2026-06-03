@@ -25,7 +25,7 @@ FILTERS = {
     "ebitdaMargins": 0.15,
     "operatingMargins": 0.10,
     "earningsGrowth": 0.10,
-    "revenueGrowth": 0.05,
+    "revenueGrowth": 0.10,
     "returnOnAssets": 0.05,
     "returnOnEquity": 0.20,
     "freeCashflow": 0.0
