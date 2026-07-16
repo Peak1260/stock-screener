@@ -182,13 +182,10 @@ def fetch_in_batches(tickers, existing_symbols):
         else:
             ev_to_ebitda = info.get("enterpriseToEbitda")
 
-        # 4. Sanity check: If Yahoo's data is so broken it's over 1000, nullify it 
-        # so it doesn't wreck your database or screener math
-        if ev_to_rev and ev_to_rev > 1000:
+        if ev_to_rev and ev_to_rev > 1000 and ev_to_rev < 0:
             ev_to_rev = None
-        if ev_to_ebitda and ev_to_ebitda > 1000:
+        if ev_to_ebitda and ev_to_ebitda > 1000 and ev_to_ebitda < 0:
             ev_to_ebitda = None
-        # --- END ADR / ASML MULTIPLE FIX ---
 
         stock_data = {
             "symbol": info.get("symbol"),
