@@ -156,10 +156,44 @@ def fetch_in_batches(tickers, existing_symbols):
                     print(f"  Firestore delete failed for {symbol}: {e}")
             continue
 
+        # --- BEGIN ADR / ASML MULTIPLE FIX ---
+        # 1. Pull the raw figures to calculate Enterprise Value (EV)
+        market_cap = info.get("marketCap", 0)
+        total_debt = info.get("totalDebt", 0)
+        total_cash = info.get("totalCash", 0)
+        revenue = info.get("totalRevenue", 0)
+        ebitda = info.get("ebitda", 0)
+
+        # 2. Calculate EV: Market Cap + Debt - Cash
+        # Need to ensure they aren't None before doing math
+        safe_mc = market_cap if market_cap else 0
+        safe_debt = total_debt if total_debt else 0
+        safe_cash = total_cash if total_cash else 0
+        ev = safe_mc + safe_debt - safe_cash
+
+        # 3. Manually calculate the ratios, falling back to Yahoo's if raw data is missing
+        if ev and revenue:
+            ev_to_rev = ev / revenue
+        else:
+            ev_to_rev = info.get("enterpriseToRevenue")
+
+        if ev and ebitda:
+            ev_to_ebitda = ev / ebitda
+        else:
+            ev_to_ebitda = info.get("enterpriseToEbitda")
+
+        # 4. Sanity check: If Yahoo's data is so broken it's over 1000, nullify it 
+        # so it doesn't wreck your database or screener math
+        if ev_to_rev and ev_to_rev > 1000:
+            ev_to_rev = None
+        if ev_to_ebitda and ev_to_ebitda > 1000:
+            ev_to_ebitda = None
+        # --- END ADR / ASML MULTIPLE FIX ---
+
         stock_data = {
             "symbol": info.get("symbol"),
             "name": info.get("shortName"),
-            "marketCap": info.get("marketCap"),
+            "marketCap": market_cap,
             "grossMargins": info.get("grossMargins"),
             "ebitdaMargins": info.get("ebitdaMargins"),
             "operatingMargins": info.get("operatingMargins"),
@@ -167,8 +201,8 @@ def fetch_in_batches(tickers, existing_symbols):
             "revenueGrowth": info.get("revenueGrowth"),
             "forwardPE": info.get("forwardPE"),
             "trailingPegRatio": info.get("trailingPegRatio"),
-            "enterpriseToRevenue": info.get("enterpriseToRevenue"),
-            "enterpriseToEbitda": info.get("enterpriseToEbitda"),
+            "enterpriseToRevenue": ev_to_rev,      
+            "enterpriseToEbitda": ev_to_ebitda,        
             "freeCashflow": info.get("freeCashflow"),
             "returnOnAssets": info.get("returnOnAssets"),
             "returnOnEquity": info.get("returnOnEquity"),
