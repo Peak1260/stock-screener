@@ -103,8 +103,6 @@ def fetch_ticker_with_retry(symbol, max_retries=2):
             t = yf.Ticker(symbol)
             info = t.info
 
-            # yfinance sometimes returns a minimal stub dict on rate limit
-            # instead of raising -- detect this by checking for a key field
             if not info or len(info) < 10:
                 raise ValueError(f"Suspiciously thin info dict ({len(info)} keys)")
 
@@ -129,10 +127,10 @@ def fetch_ticker_with_retry(symbol, max_retries=2):
     return None
 
 
-def fetch_in_batches(tickers):
+def fetch_in_batches(tickers, existing_symbols):
     """
     Fetch tickers one at a time with retry logic and paced sleeping.
-    Avoids bulk yf.Tickers() which is harder to recover from mid-batch.
+    Updates existing stocks, adds new ones, and removes ones that no longer pass.
     """
     all_results = []
     total = len(tickers)
@@ -143,12 +141,19 @@ def fetch_in_batches(tickers):
         info = fetch_ticker_with_retry(symbol)
         if not info:
             continue
-
-        if not passes_filters(info):
-            continue
-
+            
+        # Check if it passes our valuation / price checks
+        passed = passes_filters(info)
         price = info.get("currentPrice", info.get("regularMarketPrice", 0))
-        if price < 1:
+
+        # If it fails the checks, but is currently in the DB, delete it
+        if not passed or price < 1:
+            if symbol in existing_symbols:
+                try:
+                    db.collection("stocks").document(symbol).delete()
+                    print(f"  Removed {symbol} (no longer passes filters)")
+                except Exception as e:
+                    print(f"  Firestore delete failed for {symbol}: {e}")
             continue
 
         stock_data = {
@@ -170,9 +175,14 @@ def fetch_in_batches(tickers):
         }
 
         try:
+            # .set() automatically overwrites the entire document, giving you an updated valuation
             db.collection("stocks").document(stock_data["symbol"]).set(stock_data)
             all_results.append(stock_data)
-            print(f"  Added {symbol}")
+            
+            if symbol in existing_symbols:
+                print(f"  Updated {symbol}")
+            else:
+                print(f"  Added {symbol}")
         except Exception as e:
             print(f"  Firestore write failed for {symbol}: {e}")
 
@@ -184,7 +194,7 @@ def fetch_in_batches(tickers):
         else:
             time.sleep(random.uniform(1, 3))
 
-    print(f"Done. {len(all_results)} stocks added to Firestore.")
+    print(f"Done. {len(all_results)} total stocks passed and saved to Firestore.")
     return all_results
 
 
@@ -198,11 +208,9 @@ def main():
 
     existing_docs = db.collection("stocks").stream()
     existing_symbols = set(doc.id for doc in existing_docs)
+    print(f"Tickers currently in DB: {len(existing_symbols)}")
 
-    filtered_tickers = [t for t in all_tickers if t not in existing_symbols]
-    print(f"Tickers not yet in DB: {len(filtered_tickers)}")
-
-    fetch_in_batches(filtered_tickers)
+    fetch_in_batches(all_tickers, existing_symbols)
 
 
 if __name__ == "__main__":
