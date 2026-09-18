@@ -31,6 +31,11 @@ FILTERS = {
     "freeCashflow": 0.0
 }
 
+# Yahoo Finance's GICS-style "sector" field. Tech-adjacent names like
+# "Communication Services" are intentionally excluded — add them here if
+# you want a broader net.
+ALLOWED_SECTORS = {"Technology"}
+
 
 def get_tickers_from_nasdaq():
     """
@@ -77,8 +82,11 @@ def get_tickers_from_nasdaq():
 
 
 def passes_filters(info):
-    """Apply custom filters to Yahoo Finance data."""
+    """Apply sector + fundamental filters to Yahoo Finance data."""
     try:
+        if info.get("sector") not in ALLOWED_SECTORS:
+            return False
+
         return (
             info.get("grossMargins", 0) > FILTERS["grossMargins"] and
             info.get("ebitdaMargins", 0) > FILTERS["ebitdaMargins"] and
@@ -131,8 +139,13 @@ def fetch_in_batches(tickers, existing_symbols):
     """
     Fetch tickers one at a time with retry logic and paced sleeping.
     Updates existing stocks, adds new ones, and removes ones that no longer pass.
+
+    Returns (all_results, unresolved_symbols) where unresolved_symbols are
+    existing DB entries whose fetch failed this run and so could not be
+    verified as still passing/failing -- these were NOT touched.
     """
     all_results = []
+    unresolved_symbols = []
     total = len(tickers)
 
     for i, symbol in enumerate(tickers):
@@ -140,9 +153,14 @@ def fetch_in_batches(tickers, existing_symbols):
 
         info = fetch_ticker_with_retry(symbol)
         if not info:
+            # Fetch failed after retries. If this symbol is already in the DB,
+            # we can't verify it right now -- flag it instead of silently
+            # leaving it in place with no visibility.
+            if symbol in existing_symbols:
+                unresolved_symbols.append(symbol)
             continue
-            
-        # Check if it passes our valuation / price checks
+
+        # Check if it passes our sector / valuation / fundamental checks
         passed = passes_filters(info)
         price = info.get("currentPrice", info.get("regularMarketPrice", 0))
 
@@ -156,7 +174,6 @@ def fetch_in_batches(tickers, existing_symbols):
                     print(f"  Firestore delete failed for {symbol}: {e}")
             continue
 
-        # --- BEGIN ADR / ASML MULTIPLE FIX ---
         # 1. Pull the raw figures to calculate Enterprise Value (EV)
         market_cap = info.get("marketCap", 0)
         total_debt = info.get("totalDebt", 0)
@@ -190,6 +207,8 @@ def fetch_in_batches(tickers, existing_symbols):
         stock_data = {
             "symbol": info.get("symbol"),
             "name": info.get("shortName"),
+            "sector": info.get("sector"),
+            "industry": info.get("industry"),
             "marketCap": market_cap,
             "grossMargins": info.get("grossMargins"),
             "ebitdaMargins": info.get("ebitdaMargins"),
@@ -198,8 +217,8 @@ def fetch_in_batches(tickers, existing_symbols):
             "revenueGrowth": info.get("revenueGrowth"),
             "forwardPE": info.get("forwardPE"),
             "trailingPegRatio": info.get("trailingPegRatio"),
-            "enterpriseToRevenue": ev_to_rev,      
-            "enterpriseToEbitda": ev_to_ebitda,        
+            "enterpriseToRevenue": ev_to_rev,
+            "enterpriseToEbitda": ev_to_ebitda,
             "freeCashflow": info.get("freeCashflow"),
             "returnOnAssets": info.get("returnOnAssets"),
             "returnOnEquity": info.get("returnOnEquity"),
@@ -209,7 +228,7 @@ def fetch_in_batches(tickers, existing_symbols):
             # .set() automatically overwrites the entire document, giving you an updated valuation
             db.collection("stocks").document(stock_data["symbol"]).set(stock_data)
             all_results.append(stock_data)
-            
+
             if symbol in existing_symbols:
                 print(f"  Updated {symbol}")
             else:
@@ -226,7 +245,13 @@ def fetch_in_batches(tickers, existing_symbols):
             time.sleep(random.uniform(1, 3))
 
     print(f"Done. {len(all_results)} total stocks passed and saved to Firestore.")
-    return all_results
+    if unresolved_symbols:
+        print(
+            f"WARNING: {len(unresolved_symbols)} existing DB symbols could not be "
+            f"verified this run (fetch failed) and were left untouched: "
+            f"{', '.join(unresolved_symbols)}"
+        )
+    return all_results, unresolved_symbols
 
 
 def main():
@@ -240,6 +265,18 @@ def main():
     existing_docs = db.collection("stocks").stream()
     existing_symbols = set(doc.id for doc in existing_docs)
     print(f"Tickers currently in DB: {len(existing_symbols)}")
+
+    # Remove any DB entries for symbols that have dropped off the exchange
+    # listing entirely (delisted, renamed, etc.) -- these would otherwise
+    # never be visited by the main loop below since it only iterates over
+    # the freshly-pulled ticker list.
+    delisted = existing_symbols - set(all_tickers)
+    for symbol in delisted:
+        try:
+            db.collection("stocks").document(symbol).delete()
+            print(f"Removed {symbol} (no longer in exchange listings)")
+        except Exception as e:
+            print(f"Firestore delete failed for {symbol}: {e}")
 
     fetch_in_batches(all_tickers, existing_symbols)
 

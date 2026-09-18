@@ -48,17 +48,17 @@ export default function NavBar({ user }) {
         </Link>
       </div>
 
-      // <div className="flex-grow max-w-xl mx-auto">
-      //   <form onSubmit={onFormSubmit}>
-      //     <input
-      //       type="search"
-      //       value={searchQuery}
-      //       onChange={(e) => setSearchQuery(e.target.value)}
-      //       placeholder="Search Ticker or Name..."
-      //       className="w-full px-4 py-2 text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-      //     />
-      //   </form>
-      // </div>
+       {/* <div className="flex-grow max-w-xl mx-auto">
+         <form onSubmit={onFormSubmit}>
+           <input
+             type="search"
+             value={searchQuery}
+             onChange={(e) => setSearchQuery(e.target.value)}
+             placeholder="Search Ticker or Name..."
+             className="w-full px-4 py-2 text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+           />
+         </form>
+      </div> */}
 
       <div className="flex items-center gap-8 text-lg font-medium">
         <Link
