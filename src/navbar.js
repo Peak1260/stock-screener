@@ -5,20 +5,11 @@ import { signOut } from "firebase/auth";
 import { auth } from "./firebase";
 import { useNavigate } from "react-router-dom";
 import dingerLogo from "./dinger.png";
-import { useAnalysis } from "./AnalysisContext";
 
 export default function NavBar({ user }) {
-  const { searchQuery, setSearchQuery, handleSearchSubmit } = useAnalysis();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
-
-  const onFormSubmit = (e) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      handleSearchSubmit(searchQuery.trim().toUpperCase());
-    }
-  };
 
   const handleSignOut = async () => {
     try {
@@ -47,18 +38,6 @@ export default function NavBar({ user }) {
           Dinger
         </Link>
       </div>
-
-       {/* <div className="flex-grow max-w-xl mx-auto">
-         <form onSubmit={onFormSubmit}>
-           <input
-             type="search"
-             value={searchQuery}
-             onChange={(e) => setSearchQuery(e.target.value)}
-             placeholder="Search Ticker or Name..."
-             className="w-full px-4 py-2 text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-           />
-         </form>
-      </div> */}
 
       <div className="flex items-center gap-8 text-lg font-medium">
         <Link
