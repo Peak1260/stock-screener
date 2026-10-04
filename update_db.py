@@ -31,10 +31,7 @@ FILTERS = {
     "freeCashflow": 0.0
 }
 
-# Yahoo Finance's GICS-style "sector" field. Tech-adjacent names like
-# "Communication Services" are intentionally excluded — add them here if
-# you want a broader net.
-ALLOWED_SECTORS = {"Technology"}
+ALLOWED_SECTORS = {"Technology", "Communication Services", "Industrials", "Consumer Discretionary", "Financials"}
 
 
 def get_tickers_from_nasdaq():
