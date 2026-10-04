@@ -31,7 +31,7 @@ FILTERS = {
     "freeCashflow": 0.0
 }
 
-ALLOWED_SECTORS = {"Technology", "Communication Services", "Industrials", "Consumer Discretionary", "Financials"}
+ALLOWED_SECTORS = {"Technology", "Communication Services"}
 
 
 def get_tickers_from_nasdaq():
